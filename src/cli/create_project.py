@@ -37,8 +37,8 @@ def create_project():
 
     AmpersandIO.printMessage("Preparing for mesh generation")
 
-    refinement_level = AmpersandDataInput.get_mesh_refinement_level()
-    project.set_refinement_level(refinement_level)
+    refinement_amount = AmpersandDataInput.get_mesh_refinement_amount()
+    project.set_refinement_amount(refinement_amount)
 
     ModProject.add_geometry(project)
 
@@ -75,15 +75,13 @@ def create_project():
 
     project.summarize_project()
 
-    project.write_settings()
-    project.write_project_files()
-
+    ProjectService.write_project(project)
 
 
 def write_project(project_input: ProjectInputModel):
     AmpersandIO.printMessage(f"Creating project at {project_input.project_path}")
     project = ProjectService.create_project(project_input.project_path)
-    project.set_refinement_level(project_input.refinement_level)
+    project.set_refinement_amount(project_input.refinement_amount)
 
     
     project.set_flow_type(project_input.is_internal_flow)
@@ -103,17 +101,16 @@ def write_project(project_input: ProjectInputModel):
     project.set_post_process_settings(project_input.use_function_objects)
 
     project.summarize_project()
-    project.write_settings()
-    project.write_project_files()
+    ProjectService.write_project(project)
 
 
 if __name__ == '__main__':
     input = ProjectInputModel(
         project_path=Path("/workspaces/ampersandCFD/foamProjects/hello"),
-        refinement_level=0,
-        on_ground=True,
+        refinement_amount="fine",
+        on_ground=False,
         fluid_properties=FLUID_PYSICAL_PROPERTIES["Air"],
-        inlet_values=(10,0,0),
+        inlet_values=(600,0,0),
         n_core=4,
         is_half_model=True,
         is_internal_flow=False,

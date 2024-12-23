@@ -435,7 +435,8 @@ class mainWindow(QMainWindow):
             if yNC == 1:  # if yes
                 # save the project
                 self.project.add_stl_to_project()
-                self.project.write_settings()
+                ProjectService.write_settings(self.project)
+
                 self.disableButtons()
                 self.ren.RemoveAllViewProps()
             elif yNC == -1:  # if no
@@ -463,7 +464,7 @@ class mainWindow(QMainWindow):
         self.project = ProjectService.create_project(project_path)
 
 
-        self.project.set_refinement_level()
+        self.project.set_refinement_amount()
         # Now enable the buttons
         self.enableButtons()
         self.readyStatusBar()
@@ -484,7 +485,7 @@ class mainWindow(QMainWindow):
                 # save the project
 
                 self.project.add_stl_file()
-                self.project.write_settings()
+                ProjectService.write_settings(self.project)
                 self.disableButtons()
                 self.ren.RemoveAllViewProps()
             elif yNC == -1:  # if no
@@ -534,8 +535,7 @@ class mainWindow(QMainWindow):
         self.project.useFOs = True
         self.project.set_post_process_settings()
         self.project.summarize_project()
-        self.project.write_settings()
-        self.project.write_project_files()
+        ProjectService.write_project(self.project)
         self.readyStatusBar()
 
     def autoDomain(self):

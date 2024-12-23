@@ -163,11 +163,11 @@ streamLines
         massFlowFO = ""
         # for internal flow problems, get all patches
         if (meshSettings.internalFlow):
-            for patch_name, patch in meshSettings.geometry.items():
-                if (patch.purpose == "inlet" or patch.purpose == "outlet"):
+            for geometry_name, geometry in meshSettings.geometry.items():
+                patch_name = geometry_name.split(".")[0]
+                if (geometry.purpose == "inlet" or geometry.purpose == "outlet"):
                     # TODO: why is this -4, for removing "name"?
-                    massFlowFO += PostProcess.FO_massFlow(
-                        patchName=patch_name[:-4])
+                    massFlowFO += PostProcess.FO_massFlow(patchName=patch_name)
                     # massFlowFO += postProcess.FO_massFlow(patchName=patch)
         else:
             # for external flow problems, there are only inlet and outlet patches

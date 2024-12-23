@@ -1,15 +1,23 @@
+import os
 from pathlib import Path
 import shutil
 from typing import Union
+from src.blockMeshGenerator import create_blockMeshDict
+from src.boundaryConditionsGenerator import create_boundary_conditions
+from src.controlDictGenerator import createControlDict
+from src.decomposeParGenerator import createDecomposeParDict
 from src.models.settings import SimulationSettings
+from src.numericalSettingsGenerator import create_fvSchemesDict, create_fvSolutionDict
+from src.postProcess import PostProcess
 from src.primitives import AmpersandIO, AmpersandUtils
 from src.project import AmpersandProject
+from src.scriptGenerator import ScriptGenerator
+from src.snappyHexMeshGenerator import create_snappyHexMeshDict
+from src.surfaceExtractor import create_surfaceDict
+from src.transportAndTurbulence import create_transportPropertiesDict, create_turbulencePropertiesDict
 
 
 class ProjectService:
-
-
-
     @staticmethod
     def create_project(project_path: Union[str, Path]):
         """Create the project directory structure for an OpenFOAM case.
@@ -29,13 +37,13 @@ class ProjectService:
             raise ValueError("No project path provided")
 
         project_path = Path(project_path)
-
+        
         # Create required OpenFOAM directories 
         required_dirs = [
             project_path / "0",
             project_path / "constant",
             project_path / "system",
-            project_path / "constant/triSurface"
+            project_path / "constant" / "triSurface"
         ]
 
         try:
@@ -46,7 +54,7 @@ class ProjectService:
         except OSError as e:
             raise OSError(f"Failed to create OpenFOAM directory structure: {e}")
         
-        project.write_settings()
+        ProjectService.write_settings(project)
 
         return project
 
@@ -60,6 +68,81 @@ class ProjectService:
 
         AmpersandIO.printMessage("Project loaded successfully")
         return project
+
+    @staticmethod
+    def write_project(project: AmpersandProject):
+        ProjectService.write_settings(project)
+        ProjectService.write_openfoam_files(project)
+
+    @staticmethod
+    def write_settings(project: AmpersandProject):
+        AmpersandIO.printMessage("Writing settings to project_settings.yaml")
+        AmpersandUtils.dict_to_yaml(project.settings.model_dump(), f'{project.project_path}/project_settings.yaml')
+
+    @staticmethod
+    def write_openfoam_files(project: AmpersandProject):
+        if (not project.project_path.exists()):
+            raise FileNotFoundError(f"Project not found at: {project.project_path}")
+
+        create_boundary_conditions(project.settings.mesh, project.settings.boundaryConditions, f"{project.project_path}/0")
+
+        # go inside the constant directory
+        AmpersandIO.printMessage("Creating physical properties and turbulence properties")
+        # create transportProperties file
+        tranP = create_transportPropertiesDict(project.settings.physicalProperties)
+        # create turbulenceProperties file
+        turbP = create_turbulencePropertiesDict(project.settings.physicalProperties)
+        AmpersandUtils.write_dict_to_file(f"{project.project_path}/constant/transportProperties", tranP)
+        AmpersandUtils.write_dict_to_file(f"{project.project_path}/constant/turbulenceProperties", turbP)
+
+        # create the controlDict file
+        AmpersandIO.printMessage("Creating the system files")
+        controlDict = createControlDict(project.settings.control)
+        AmpersandUtils.write_dict_to_file(f"{project.project_path}/system/controlDict", controlDict)
+        
+        blockMeshDict = create_blockMeshDict(project.settings.mesh)
+        AmpersandUtils.write_dict_to_file(f"{project.project_path}/system/blockMeshDict", blockMeshDict)
+        
+        snappyHexMeshDict = create_snappyHexMeshDict(project.settings.mesh)
+        AmpersandUtils.write_dict_to_file(f"{project.project_path}/system/snappyHexMeshDict", snappyHexMeshDict)
+        
+        surfaceFeatureExtractDict = create_surfaceDict(project.settings.mesh, "surfaceFeatureExtractDict")
+        AmpersandUtils.write_dict_to_file(f"{project.project_path}/system/surfaceFeatureExtractDict", surfaceFeatureExtractDict)
+        
+        fvSchemesDict = create_fvSchemesDict(project.settings.numerical)
+        AmpersandUtils.write_dict_to_file(f"{project.project_path}/system/fvSchemes", fvSchemesDict)
+        
+        fvSolutionDict = create_fvSolutionDict(project.settings.numerical, project.settings.solver)
+        AmpersandUtils.write_dict_to_file(f"{project.project_path}/system/fvSolution", fvSolutionDict)
+        
+        decomposeParDict = createDecomposeParDict(project.settings.parallel)
+        AmpersandUtils.write_dict_to_file(f"{project.project_path}/system/decomposeParDict", decomposeParDict)
+        
+        FODict = PostProcess.create_FOs(project.settings.mesh, project.settings.postProcess, useFOs=project.useFOs)
+        AmpersandUtils.write_dict_to_file(f"{project.project_path}/system/FOs", FODict)
+
+        # create mesh script
+        AmpersandIO.printMessage("Creating scripts for meshing and running the simulation")
+        meshScript = ScriptGenerator.create_mesh_script(project.settings.simulationFlow)
+        AmpersandUtils.write_dict_to_file(f"{project.project_path}/mesh", meshScript)
+        
+        # create simulation script
+        simulationScript = ScriptGenerator.create_mesh_script(project.settings.simulationFlow)
+        AmpersandUtils.write_dict_to_file(f"{project.project_path}/run", simulationScript)
+        
+        AmpersandUtils.crlf_to_LF(f"{project.project_path}/mesh")
+        AmpersandUtils.crlf_to_LF(f"{project.project_path}/run")
+        
+        mesh_script = Path(project.project_path) / "mesh"
+        run_script = Path(project.project_path) / "run"
+        if os.name != 'nt':
+            mesh_script.chmod(0o755)
+            run_script.chmod(0o755)
+        
+        AmpersandIO.printMessage("\n-----------------------------------")
+        AmpersandIO.printMessage("Project files created successfully!")
+        AmpersandIO.printMessage("-----------------------------------\n")
+
 
 
     @staticmethod

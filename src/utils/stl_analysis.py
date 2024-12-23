@@ -23,152 +23,85 @@ from typing import Union
 import vtk
 import numpy as np
 import math
-from src.models.settings import Domain, MeshSettings, SearchableBoxGeometry, TriSurfaceMeshGeometry
-from src.thirdparty.stlToOpenFOAM import find_inside_point, is_point_inside, read_stl_file
+from src.models.settings import BoundingBox, Domain, MeshSettings, SearchableBoxGeometry, SimulationSettings, TriSurfaceMeshGeometry, RefinementAmount, PatchPurpose, PatchProperty
+from src.thirdparty.stlToOpenFOAM import find_inside_point, find_outside_point, is_point_inside, read_stl_file
 from src.thirdparty.stlToOpenFOAM import extract_curvature_data, compute_curvature
 from src.primitives import AmpersandIO
 
 
 class StlAnalysis:
     @staticmethod
-    def roundl(x):
-        return float(np.around(x, decimals=1))
+    def calc_domain_bbox(stl_bbox: BoundingBox, size_factor=1.0, on_ground=False, internal_flow=False, is_half_model=False):
+        max_length = stl_bbox.max_length
+        max_size_factor = max_length*size_factor
 
-    # to calculate the domain size for blockMeshDict
+        if (internal_flow):
+            domain_bbox = stl_bbox.scale_dimensions(-0.1*size_factor, 0.1*size_factor, -0.1*size_factor, 0.1*size_factor, -0.1*size_factor, 0.1*size_factor)
+        else:
+            domain_bbox = stl_bbox.scale_dimensions(-3*max_size_factor, 9*max_size_factor, -2*max_size_factor, 2*max_size_factor, -2*max_size_factor, 2*max_size_factor)
 
-    @staticmethod
-    def calc_domain_size(stlBoundingBox, sizeFactor: float=1, onGround=False,
-                         internalFlow=False, halfModel=False):
-        stlMinX, stlMaxX, stlMinY, stlMaxY, stlMinZ, stlMaxZ = stlBoundingBox
-        # this part is for external flow
-        bbX = stlMaxX - stlMinX
-        bbY = stlMaxY - stlMinY
-        bbZ = stlMaxZ - stlMinZ
-        characLength = max(bbX, bbY, bbZ)
-        minX = stlMinX - 3.0*characLength*sizeFactor
-        maxX = stlMaxX + 9.0*characLength*sizeFactor
-        minY = stlMinY - 2.0*characLength*sizeFactor
-        maxY = stlMaxY + 2.0*characLength*sizeFactor
-        minZ = stlMinZ - 2.0*characLength*sizeFactor
-        maxZ = stlMaxZ + 2.0*characLength*sizeFactor
 
-        if (internalFlow):
-            minX = stlMinX - 0.1*bbX*sizeFactor
-            maxX = stlMaxX + 0.1*bbX*sizeFactor
-            minY = stlMinY - 0.1*bbY*sizeFactor
-            maxY = stlMaxY + 0.1*bbY*sizeFactor
-            minZ = stlMinZ - 0.1*bbZ*sizeFactor
-            maxZ = stlMaxZ + 0.1*bbZ*sizeFactor
+        if on_ground:  # the the body is touching the ground
+            domain_bbox.minz = stl_bbox.minz
+            domain_bbox.maxz = stl_bbox.maxz + 4.0*max_size_factor
+        
+        if is_half_model:
+            domain_bbox.maxy = (domain_bbox.maxy+domain_bbox.miny)/2.
+        return domain_bbox
 
-        if onGround:  # the the body is touching the ground
-            minZ = stlMinZ
-            maxZ = stlMaxZ + 4.0*characLength*sizeFactor
-        if halfModel:
-            maxY = (maxY+minY)/2.
-        domain_size = (minX, maxX, minY, maxY, minZ, maxZ)
-        return domain_size
-
-    # to calculate the max length of STL
-    @staticmethod
-    def getMaxSTLDim(stlBoundingBox):
-        stlMinX, stlMaxX, stlMinY, stlMaxY, stlMinZ, stlMaxZ = stlBoundingBox
-        bbX = stlMaxX - stlMinX
-        bbY = stlMaxY - stlMinY
-        bbZ = stlMaxZ - stlMinZ
-        return max(bbX, bbY, bbZ)
-
-    # to calculate the min size of stl
-    @staticmethod
-    def getMinSTLDim(stlBoundingBox):
-        stlMinX, stlMaxX, stlMinY, stlMaxY, stlMinZ, stlMaxZ = stlBoundingBox
-        bbX = stlMaxX - stlMinX
-        bbY = stlMaxY - stlMinY
-        bbZ = stlMaxZ - stlMinZ
-        return min(bbX, bbY, bbZ)
 
     # to calculate the refinement box for snappyHexMeshDict
     @staticmethod
-    def getRefinementBox(stlBoundingBox):
-        stlMinX, stlMaxX, stlMinY, stlMaxY, stlMinZ, stlMaxZ = stlBoundingBox
-        bbX = stlMaxX - stlMinX
-        bbY = stlMaxY - stlMinY
-        bbZ = stlMaxZ - stlMinZ
-        boxMinX = stlMinX - 0.7*bbX
-        boxMaxX = stlMaxX + 15*bbX
-        boxMinY = stlMinY - 1.0*bbY
-        boxMaxY = stlMaxY + 1.0*bbY
-        boxMinZ = stlMinZ - 1.0*bbZ
-        boxMaxZ = stlMaxZ + 1.0*bbZ
-        return (boxMinX, boxMaxX, boxMinY, boxMaxY, boxMinZ, boxMaxZ)
+    def get_refinement_box(stl_bbox: BoundingBox):
+        return stl_bbox.scale_dimensions(-0.7, 15.0, -1.0, 1.0, -1.0, 1.0)
 
     @staticmethod
-    def getRefinementBoxClose(stlBoundingBox):
-        stlMinX, stlMaxX, stlMinY, stlMaxY, stlMinZ, stlMaxZ = stlBoundingBox
-        bbX = stlMaxX - stlMinX
-        bbY = stlMaxY - stlMinY
-        bbZ = stlMaxZ - stlMinZ
-        boxMinX = stlMinX - 0.2*bbX
-        boxMaxX = stlMaxX + 3.0*bbX
-        boxMinY = stlMinY - 0.45*bbY
-        boxMaxY = stlMaxY + 0.45*bbY
-        boxMinZ = stlMinZ - 0.45*bbZ
-        boxMaxZ = stlMaxZ + 0.45*bbZ
-        return (boxMinX, boxMaxX, boxMinY, boxMaxY, boxMinZ, boxMaxZ)
+    def get_refinement_box_close(stl_bbox: BoundingBox):
+        return stl_bbox.scale_dimensions(-0.2, 3.0, -0.45, 0.45, -0.45, 0.45)
 
     # to add refinement box to mesh settings
     @staticmethod
-    def addRefinementBoxToMesh(meshSettings: MeshSettings, stl_path, boxName='refinementBox', refLevel=2, internalFlow=False):
-        if (internalFlow):
-            return meshSettings
-        stlBoundingBox = StlAnalysis.compute_bounding_box(stl_path)
-        box = StlAnalysis.getRefinementBox(stlBoundingBox)
-        meshSettings.geometry[boxName]= SearchableBoxGeometry(
-            type='searchableBox',
-            purpose="refinementRegion",
-            min=[box[0], box[2], box[4]],
-            max=[box[1], box[3], box[5]], 
-            refineMax=refLevel-1
-        )
-        
-        fineBox = StlAnalysis.getRefinementBoxClose(stlBoundingBox)
-        meshSettings.geometry["fineBox"] = SearchableBoxGeometry(
-            type='searchableBox',
-            purpose='refinementRegion',
-            min=[fineBox[0], fineBox[2], fineBox[4]],
-            max=[fineBox[1], fineBox[3], fineBox[5]], 
-            refineMax=refLevel
-        )
-
-        return meshSettings
-
+    def get_refinement_boxes(stl_bbox: BoundingBox, boxName='refinementBox', ref_level=2, is_internal_flow=False) -> dict[str, SearchableBoxGeometry]:
+        if (is_internal_flow):
+            return {}
+        box = StlAnalysis.get_refinement_box(stl_bbox)
+        fineBox = StlAnalysis.get_refinement_box_close(stl_bbox)
+        return {
+            boxName: SearchableBoxGeometry(
+                type='searchableBox',
+                purpose="refinementRegion",
+                bbox=box,
+                refineMax=ref_level-1
+            ), 
+            "fineBox": SearchableBoxGeometry(
+                type='searchableBox',
+                purpose='refinementRegion',
+                bbox=fineBox,
+                refineMax=ref_level
+            )
+        }
+       
     # refinement box for the ground for external automotive flows
     @staticmethod
-    def addGroundRefinementBoxToMesh(meshSettings: MeshSettings, stl_path, refLevel=2):
-        # if(internalFlow):
-        #    return meshSettings
-        boxName = 'groundBox'
-        stlBoundingBox = StlAnalysis.compute_bounding_box(stl_path)
-        xmin, xmax, ymin, ymax, zmin, zmax = stlBoundingBox
-        z = meshSettings.domain.minz
-        z_delta = 0.2*(zmax-zmin)
-        box = [-1000.0, 1000., -1000, 1000, z-z_delta, z+z_delta]
-        meshSettings.geometry[boxName] = SearchableBoxGeometry(
+    def get_ground_refinement_box(mesh_settings: MeshSettings, stl_bbox: BoundingBox, refLevel=2):
+        z = mesh_settings.domain.minz
+        z_delta = 0.2*(stl_bbox.maxz-stl_bbox.minz)
+        box = BoundingBox(minx=-1000.0, maxx=1000., miny=-1000, maxy=1000, minz=z-z_delta, maxz=z+z_delta)
+        return SearchableBoxGeometry(
             type='searchableBox',
             purpose='refinementRegion', 
-            min=[box[0], box[2], box[4]],
-            max=[box[1], box[3], box[5]],
+            bbox=box,
             refineMax=refLevel
         )
-        return meshSettings
 
     # to calculate nearest wall thickness for a target yPlus value
     @staticmethod
-    def calc_y(nu=1e-6, rho=1000., L=1.0, u=1.0, target_yPlus=200):
+    def calc_y(nu=1e-6, rho=1000., L=1.0, U_val=1.0, target_yPlus=200):
         # rho = fluid_properties.rho
         # nu = fluid_properties.nu
-        Re = u*L/nu
+        Re = U_val*L/nu
         Cf = 0.0592*Re**(-1./5.)
-        tau = 0.5*rho*Cf*u**2.
+        tau = 0.5*rho*Cf*U_val**2.
         uStar = np.sqrt(tau/rho)
         y = target_yPlus*nu/uStar
         return y
@@ -197,41 +130,26 @@ class StlAnalysis:
         return int(np.ceil(n))
 
     @staticmethod
-    def calc_nx_ny_nz(domain_size, target_cell_size):
-        (minX, maxX, minY, maxY, minZ, maxZ) = domain_size
-        nx = (maxX-minX)/target_cell_size
-        ny = (maxY-minY)/target_cell_size
-        nz = (maxZ-minZ)/target_cell_size
+    def calc_nx_ny_nz(domain_bbox: BoundingBox, target_cell_size: float):
+        nx = (domain_bbox.maxx-domain_bbox.minx)/target_cell_size
+        ny = (domain_bbox.maxy-domain_bbox.miny)/target_cell_size
+        nz = (domain_bbox.maxz-domain_bbox.minz)/target_cell_size
         nx, ny, nz = int(math.ceil(nx)), int(math.ceil(ny)), int(math.ceil(nz))
         # it is better to have even number of cells
-        if nx // 2 != 0:
+        if nx % 2:  # if nx is odd
             nx += 1
-        if ny // 2 != 0:
+        if ny % 2:  # if ny is odd
             ny += 1
-        if nz // 2 != 0:
+        if nz % 2:  # if nz is odd
             nz += 1
         return (nx, ny, nz)
 
     # Function to read STL file and compute bounding box
     @staticmethod
-    def compute_bounding_box(stl_file_path):
-        # Check if the file exists
-        if not os.path.exists(stl_file_path):
-            raise FileNotFoundError(
-                f"File not found: {stl_file_path}. Make sure the file exists.")
-        # Create a reader for the STL file
-        reader = vtk.vtkSTLReader()
-        reader.SetFileName(stl_file_path)
-        reader.Update()
-
-        # Get the output data from the reader
-        poly_data = reader.GetOutput()
-
+    def compute_bounding_box(mesh: vtk.vtkPolyData):
         # Calculate the bounding box
-        bounds = poly_data.GetBounds()
-        # xmin, xmax, ymin, ymax, zmin, zmax = bounds
-        # Optionally, return the bounding box as a tuple
-        return bounds
+        bounds = mesh.GetBounds()
+        return BoundingBox(minx=bounds[0], maxx=bounds[1], miny=bounds[2], maxy=bounds[3], minz=bounds[4], maxz=bounds[5])
 
     # this is the wrapper function to check if a point is inside the mesh
     @staticmethod
@@ -259,21 +177,6 @@ class StlAnalysis:
             return False
         # Check if the point is inside the mesh
         return is_point_inside(poly_data, point)
-
-    @staticmethod
-    def read_stl(stl_file_path):
-        # Check if the file exists
-        if not os.path.exists(stl_file_path):
-            raise FileNotFoundError(
-                f"File not found: {stl_file_path}. Make sure the file exists.")
-        # Create a reader for the STL file
-        reader = vtk.vtkSTLReader()
-        reader.SetFileName(stl_file_path)
-        reader.Update()
-
-        # Get the output data from the reader
-        poly_data = reader.GetOutput()
-        return poly_data
 
     @staticmethod
     def calc_nLayer(yFirst=0.001, targetCellSize=0.1, expRatio=1.2):
@@ -305,170 +208,90 @@ class StlAnalysis:
 
         return N, finalLayerThickness
 
-    @staticmethod
-    def calc_layers_from_cell_size(yFirst=0.001, targetCellSize=0.1, expRatio=1.2):
-
-        firstLayerThickness = yFirst*2.0
-        finalLayerThickness = targetCellSize*0.35
-        nLayers = int(np.log(finalLayerThickness /
-                      firstLayerThickness)/np.log(expRatio))
-        nLayers = max(1, nLayers)
-        return nLayers, finalLayerThickness
 
     # this function calculates the smallest curvature of the mesh
     # This function calls stlToOpenFOAM functions to read the mesh and calculate curvature
 
     @staticmethod
-    def calc_smallest_curvature(stlFile):
-        mesh = read_stl_file(stlFile)
+    def calc_smallest_curvature(mesh: vtk.vtkPolyData):
         curved_mesh = compute_curvature(mesh, curvature_type='mean')
         curvature_values = extract_curvature_data(curved_mesh)
-        print(f"Curvature values: {curvature_values}")
-        min_curvature = np.min(curvature_values)
-        return min_curvature
-
-    # to calculate the mesh settings for blockMeshDict and snappyHexMeshDict
+        return np.min(curvature_values)
 
     @staticmethod
-    def calc_mesh_settings(stlBoundingBox, nu=1e-6, rho=1000., U=1.0, maxCellSize=0.5, sizeFactor=1.0,
-                           expansion_ratio=1.5, onGround=False, internalFlow=False, refinement=1,
-                           nLayers=5, halfModel=False, thicknessRatio=0.3, GUI=False):
-        maxSTLLength = StlAnalysis.getMaxSTLDim(stlBoundingBox)
-        minSTLLength = StlAnalysis.getMinSTLDim(stlBoundingBox)
-        if (maxCellSize < 0.001):
-            maxCellSize = maxSTLLength/4.
-        domain_size = StlAnalysis.calc_domain_size(stlBoundingBox=stlBoundingBox, sizeFactor=sizeFactor,
-                                                   onGround=onGround, internalFlow=internalFlow, halfModel=halfModel)
-        if (refinement == 0):
+    def calc_background_cell_size(refinement_amount: RefinementAmount, domain_bbox: BoundingBox, maxCellSize: float, internalFlow: bool):
+        max_length = domain_bbox.max_length
+        min_length = domain_bbox.min_length
+        
+        if (refinement_amount == "coarse"):
             if (internalFlow):
-                if maxSTLLength/minSTLLength > 10:  # if the geometry is very slender
-                    backgroundCellSize = min(maxSTLLength/50., maxCellSize)
+                if max_length/min_length > 10:  # if the geometry is very slender
+                    return min(max_length/50., maxCellSize)
                 else:
-                    backgroundCellSize = min(minSTLLength/8., maxCellSize)
+                    return min(min_length/8., maxCellSize)
             else:
                 # this is the size of largest blockMesh cells
-                backgroundCellSize = min(minSTLLength/3., maxCellSize)
-            target_yPlus = 70
-            # nLayers = 2
-            refLevel = 2
-        elif (refinement == 1):
+                return min(min_length/3., maxCellSize)
+        elif (refinement_amount == "medium"):
             if (internalFlow):
-                if maxSTLLength/minSTLLength > 10:  # if the geometry is very slender
-                    backgroundCellSize = min(maxSTLLength/70., maxCellSize)
+                if max_length/min_length > 10:  # if the geometry is very slender
+                    return min(max_length/70., maxCellSize)
                 else:
-                    backgroundCellSize = min(minSTLLength/12., maxCellSize)
+                    return min(min_length/12., maxCellSize)
             else:
-                backgroundCellSize = min(minSTLLength/5., maxCellSize)
-            target_yPlus = 50
-            # nLayers = 5
-            refLevel = 4
-        elif (refinement == 2):
-            if (internalFlow):
-                if maxSTLLength/minSTLLength > 10:  # if the geometry is very slender
-                    backgroundCellSize = min(maxSTLLength/90., maxCellSize)
-                else:
-                    backgroundCellSize = min(minSTLLength/16., maxCellSize)
-            else:
-                backgroundCellSize = min(minSTLLength/7., maxCellSize)
-            target_yPlus = 30
-            # nLayers = 7
-            refLevel = 6
-        else:  # medium settings for default
-            if (internalFlow):
-                backgroundCellSize = min(maxSTLLength/12., maxCellSize)
-            else:
-                backgroundCellSize = min(maxSTLLength/8., maxCellSize)
-            # nLayers = 5
-            target_yPlus = 70
-            refLevel = 4
-
-        nx, ny, nz = StlAnalysis.calc_nx_ny_nz(domain_size, backgroundCellSize)
-        backgroundCellSize = (domain_size[1]-domain_size[0])/nx
-        L = maxSTLLength  # this is the characteristic length to be used in Re calculations
-        # this is the thickness of closest cell
-        target_y = StlAnalysis.calc_y(nu, rho, L, U, target_yPlus=target_yPlus)
-        delta = StlAnalysis.calc_delta(U, nu, L)
-        # nLayers,finalLayerThickness = stlAnalysis.calc_layers(yFirst=target_y,delta=delta,expRatio=expansion_ratio)
-        if (refinement == 0):
-            refLevel = max(2, refLevel)
-        elif (refinement == 1):
-            refLevel = max(4, refLevel)
-        elif (refinement == 2):
-            refLevel = max(6, refLevel)
+                return min(min_length/5., maxCellSize)
         else:
-            refLevel = max(3, refLevel)
-        targetCellSize = backgroundCellSize/2.**refLevel
-        nLayers, finalLayerThickness = StlAnalysis.calc_layers_from_cell_size(
-            yFirst=target_y, targetCellSize=targetCellSize, expRatio=expansion_ratio)
-        nLayers = max(1, nLayers)
+            if (internalFlow):
+                if max_length/min_length > 10:  # if the geometry is very slender
+                    return min(max_length/90., maxCellSize)
+                else:
+                    return min(min_length/16., maxCellSize)
+            else:
+                return min(min_length/7., maxCellSize)
 
-        # adjust refinement levels based on coarse, medium, fine settings
 
-        adjustedNearWallThickness = finalLayerThickness / \
-            expansion_ratio**(nLayers-1)
-        adjustedYPlus = StlAnalysis.calc_yPlus(
-            nu, L, U, adjustedNearWallThickness/2.)
-
-        # minVolumeSize = backgroundCellSize**3/(8.**refLevel*20.)
-        # print the summary of results
-        AmpersandIO.printMessage(
-            "\n-----------------Mesh Settings-----------------")
-        AmpersandIO.printMessage(f"Domain size: x({domain_size[0]:6.3f}~{domain_size[1]:6.3f}) y({domain_size[2]:6.3f}~{
-                                 domain_size[3]:6.3f}) z({domain_size[4]:6.3f}~{domain_size[5]:6.3f})")
-        AmpersandIO.printMessage(f"Nx Ny Nz: {nx},{ny},{nz}")
-        AmpersandIO.printMessage(f"Max cell size: {backgroundCellSize}")
-        AmpersandIO.printMessage(f"Min cell size: {targetCellSize}")
-        AmpersandIO.printMessage(f"Refinement Level:{refLevel}")
-
-        AmpersandIO.printMessage(
-            "\n-----------------Turbulence-----------------")
-        AmpersandIO.printMessage(f"Target yPlus:{target_yPlus}")
-        AmpersandIO.printMessage(f'Reynolds number:{U*L/nu}')
-        AmpersandIO.printMessage(f"Boundary layer thickness:{delta}")
-        AmpersandIO.printMessage(f"First layer thickness:{adjustedNearWallThickness}")
-        AmpersandIO.printMessage(f"Final layer thickness:{finalLayerThickness}")
-        AmpersandIO.printMessage(f"YPlus:{adjustedYPlus}")
-        AmpersandIO.printMessage(f"Number of layers:{nLayers}")
-        return domain_size, nx, ny, nz, refLevel, finalLayerThickness, nLayers
 
     @staticmethod
-    def set_layer_thickness(meshSettings: MeshSettings, thickness=0.01):
-        meshSettings.addLayersControls.finalLayerThickness = thickness
-        minThickness = max(0.0001, thickness/100.)
-        meshSettings.addLayersControls.minThickness = minThickness
-        return meshSettings
+    def calc_domain(stl_bbox: BoundingBox, settings: SimulationSettings, max_cell_size=2.0, size_factor=1.0):
+        characteristic_length = stl_bbox.max_length
+
+        if (max_cell_size < 0.001):
+            max_cell_size = characteristic_length/4.
+
+        domain_size = StlAnalysis.calc_domain_bbox(stl_bbox, size_factor, settings.mesh.onGround, settings.mesh.internalFlow, settings.mesh.halfModel)
+        if (max_cell_size < 0.001):
+            max_cell_size = characteristic_length/4.
+        background_cell_size = StlAnalysis.calc_background_cell_size(settings.mesh.refAmount, domain_size, max_cell_size, settings.mesh.internalFlow)
+        nx, ny, nz = StlAnalysis.calc_nx_ny_nz(domain_size, background_cell_size)
+        return Domain.from_bbox(domain_size, nx, ny, nz)
+
 
     @staticmethod
-    def set_min_vol(meshSettings: MeshSettings, minVol=1e-15):
-        meshSettings.meshQualityControls.minVol = 1e-15  # minVol/100.
-        return meshSettings
+    def calc_num_layers(stl_bbox: BoundingBox, domain: Domain, settings: SimulationSettings, ref_level: int):
+        characteristic_length = stl_bbox.max_length
 
-    # to set mesh settings for blockMeshDict and snappyHexMeshDict
-    @staticmethod
-    def set_mesh_settings(meshSettings: MeshSettings, domain_size, nx, ny, nz, refLevel, featureLevel=1, nLayers=None):
-        meshSettings.domain = Domain(
-            minx=domain_size[0],
-            maxx=domain_size[1], 
-            miny=domain_size[2],
-            maxy=domain_size[3],
-            minz=domain_size[4],
-            maxz=domain_size[5],
-            nx=nx,
-            ny=ny,
-            nz=nz
+        target_yPlus = {
+            "coarse": 70,
+            "medium": 50,
+            "fine": 30,
+        }[settings.mesh.refAmount]
+        
+        background_cell_size = (domain.maxx-domain.minx)/domain.nx
+        # this is the thickness of closest cell
+        target_y = StlAnalysis.calc_y(
+            settings.physicalProperties.nu, 
+            settings.physicalProperties.rho, 
+            characteristic_length, 
+            U_val=max(settings.inletValues.U), 
+            target_yPlus=target_yPlus
         )
         
-        refMin = max(1, refLevel)
-        refMax = max(2, refLevel)
-        for geometry in meshSettings.geometry.values():
-            if isinstance(geometry, TriSurfaceMeshGeometry):
-                geometry.refineMin = refMin
-                geometry.refineMax = refMax
-                # geometry.featureEdges = 'true'
-                geometry.featureLevel = featureLevel
-                if nLayers is not None:
-                    geometry.nLayers = nLayers
-        return meshSettings
+        target_cell_size = background_cell_size/2.**ref_level
+        first_layer_thickness = target_y*2.0
+        final_layer_thickness = target_cell_size*0.35
+
+        return max(1, int(np.log(final_layer_thickness / first_layer_thickness)/np.log(settings.mesh.addLayersControls.expansionRatio)))
+
 
     @staticmethod
     def calc_center_of_mass(mesh: vtk.vtkPolyData):
@@ -479,76 +302,129 @@ class StlAnalysis:
         return center_of_mass
 
     @staticmethod
-    def analyze_stl(stl_file_path):
-        mesh = StlAnalysis.read_stl(stl_file_path)
-        bounds = StlAnalysis.compute_bounding_box(stl_file_path)
-        stlMinX, stlMaxX, stlMinY, stlMaxY, stlMinZ, stlMaxZ = bounds
-        outsideX = stlMaxX + 0.05*(stlMaxX-stlMinX)
-        outsideY = stlMinY*0.95  # (stlMaxY - stlMinY)/2.
-        outsideZ = (stlMaxZ - stlMinZ)/2.
-        outsidePoint = (outsideX, outsideY, outsideZ)
+    def get_location_in_mesh(mesh: vtk.vtkPolyData, is_internal_flow: bool) -> tuple[float, float, float]:
         center_of_mass = StlAnalysis.calc_center_of_mass(mesh)
-        insidePoint = find_inside_point(
-            mesh, center_of_mass, min_bounds=None, max_bounds=None)
-        return center_of_mass, insidePoint, outsidePoint
-
-    @staticmethod
-    def set_mesh_location(meshSettings: MeshSettings, stl_file_path, internalFlow=False):
-        center_of_mass, insidePoint, outsidePoint = StlAnalysis.analyze_stl(stl_file_path)
-        if internalFlow:
-            meshSettings.castellatedMeshControls.locationInMesh = (insidePoint[0], insidePoint[1], insidePoint[2])
-        else:
-            meshSettings.castellatedMeshControls.locationInMesh = (outsidePoint[0], outsidePoint[1], outsidePoint[2])
-        return meshSettings
-
+        outside_point = StlAnalysis.get_outside_point(mesh)
+        inside_point = find_inside_point(mesh, center_of_mass, min_bounds=None, max_bounds=None)
+        return tuple(inside_point if is_internal_flow else outside_point) # type: ignore
+        
     @staticmethod 
     def set_stl_solid_name(stl_file: Union[str, Path]) -> int:
-        """
-        Sets/updates the solid name in an STL file to match the filename.
+        stl_path = Path(stl_file)
+        AmpersandIO.printMessage(f"Setting solid name for {stl_path}")
         
-        Args:
-            stl_file: Path to STL file as string or Path object
-            
-        Returns:
-            0 on success, -1 on failure
-            
-        Raises:
-            FileNotFoundError: If STL file does not exist
-            PermissionError: If lacking write permissions
-            UnicodeDecodeError: If file has invalid encoding
-        """
-        try:
-            stl_path = Path(stl_file)
-            AmpersandIO.printMessage(f"Setting solid name for {stl_path}")
-            
-            if not stl_path.exists():
-                raise FileNotFoundError(f"STL file not found: {stl_path}")
+        if not stl_path.exists():
+            raise FileNotFoundError(f"STL file not found: {stl_path}")
 
-            if not stl_path.is_file():
-                raise ValueError(f"Path is not a file: {stl_path}")
+        if not stl_path.is_file():
+            raise ValueError(f"Path is not a file: {stl_path}")
 
-            # Extract solid name from filename without extension
-            solid_name = stl_path.stem
+        # Extract solid name from filename without extension
+        solid_name = stl_path.stem
 
-            # Read and process file contents
-            lines = stl_path.read_text().splitlines()
-            new_lines = []
-            for line in lines:
-                if 'endsolid' in line.lower():
-                    line = f"endsolid {solid_name}"
-                elif line.lower().lstrip().startswith('solid'):
-                    line = f"solid {solid_name}"
-                new_lines.append(line + '\n')
-            
-            # Write back to file
-            stl_path.write_text(''.join(new_lines))
-            return 0
+        # Read and process file contents
+        lines = stl_path.read_text().splitlines()
+        new_lines = []
+        for line in lines:
+            if 'endsolid' in line.lower():
+                line = f"endsolid {solid_name}"
+            elif line.lower().lstrip().startswith('solid'):
+                line = f"solid {solid_name}"
+            new_lines.append(line + '\n')
+        
+        # Write back to file
+        stl_path.write_text(''.join(new_lines))
+        return 0
 
-        except (FileNotFoundError, PermissionError, UnicodeDecodeError) as e:
-            AmpersandIO.printMessage(f"Error processing STL file: {e}")
-            return -1
+    
+
+    @staticmethod
+    def get_outside_point(mesh: vtk.vtkPolyData):
+        stl_bbox = StlAnalysis.compute_bounding_box(mesh)
+        outsideX = stl_bbox.maxx + 0.05*(stl_bbox.maxx-stl_bbox.minx)
+        outsideY = stl_bbox.miny*0.95  # (stlMaxY - stlMinY)/2.
+        outsideZ = (stl_bbox.maxz - stl_bbox.minz)/2.
+        outsidePoint = (outsideX, outsideY, outsideZ)
+        return outsidePoint
 
 
-if __name__ == "__main__":
-    stl_file = "stl/ahmed.stl"
-    minCurv = StlAnalysis.calc_smallest_curvature(stl_file)
+    # to set mesh settings for blockMeshDict and snappyHexMeshDict
+    # TODO: make this apply for multiple stl files
+    @staticmethod
+    def update_settings(settings: SimulationSettings, stl_path: Union[str, Path], purpose: PatchPurpose, property: PatchProperty):
+        stl_name = Path(stl_path).name
+        stl_mesh = read_stl_file(str(stl_path))
+        stl_bbox = StlAnalysis.compute_bounding_box(stl_mesh)
+
+        # Skip feature edges for refinement regions
+        feature_edges = purpose not in ('refinementRegion', 'refinementSurface')
+        
+        ref_level = {
+            "coarse": 2,
+            "medium": 4,
+            "fine": 6,
+        }[settings.mesh.refAmount]
+
+        settings.mesh.domain = StlAnalysis.calc_domain(stl_bbox, settings)
+        num_layers = StlAnalysis.calc_num_layers(stl_bbox, settings.mesh.domain, settings, ref_level)
+
+        settings.mesh.geometry[stl_name] = TriSurfaceMeshGeometry(
+            purpose=purpose,
+            refineMin=0,
+            refineMax=0,
+            featureEdges=feature_edges,
+            featureLevel=1,
+            nLayers=num_layers,
+            property=property,
+            bounds=stl_bbox
+        )
+
+        refMin = max(1, ref_level)
+        refMax = max(2, ref_level)
+        for geometry in settings.mesh.geometry.values():
+            if isinstance(geometry, TriSurfaceMeshGeometry):
+                geometry.refineMin = refMin
+                geometry.refineMax = refMax
+                geometry.featureLevel = max(ref_level, 1)
+                geometry.nLayers = num_layers
+
+        settings.mesh.castellatedMeshControls.locationInMesh = StlAnalysis.get_location_in_mesh(stl_mesh, settings.mesh.internalFlow)
+        
+        box_ref_level = max(2, ref_level-3)
+        refinement_boxes = StlAnalysis.get_refinement_boxes(stl_bbox, ref_level=box_ref_level, is_internal_flow=settings.mesh.internalFlow)
+        settings.mesh.geometry.update(refinement_boxes)
+        if (not settings.mesh.internalFlow and settings.mesh.onGround):
+            # if the flow is external and the geometry is on the ground, add a ground refinement box
+            settings.mesh.geometry["groundBox"] = StlAnalysis.get_ground_refinement_box(settings.mesh, stl_bbox, box_ref_level)
+        
+        # set the layer thickness to 0.5 times the cell size
+        settings.mesh.addLayersControls.finalLayerThickness = 0.5
+        minThickness = max(0.0001, settings.mesh.addLayersControls.finalLayerThickness/100.)
+        settings.mesh.addLayersControls.minThickness = minThickness
+
+        # store the background mesh size for future reference
+        settings.mesh.maxCellSize = abs((settings.mesh.domain.maxx-settings.mesh.domain.minx)/settings.mesh.domain.nx)
+
+        return settings.mesh
+
+
+
+
+        # # print the summary of results
+        # AmpersandIO.printMessage(
+        #     "\n-----------------Mesh Settings-----------------")
+        # AmpersandIO.printMessage(f"Domain size: {domain_size.size}")
+        # AmpersandIO.printMessage(f"Nx Ny Nz: {nx},{ny},{nz}")
+        # AmpersandIO.printMessage(f"Max cell size: {backgroundCellSize}")
+        # AmpersandIO.printMessage(f"Min cell size: {targetCellSize}")
+        # AmpersandIO.printMessage(f"Refinement Level:{ref_level}")
+
+        # AmpersandIO.printMessage(
+        #     "\n-----------------Turbulence-----------------")
+        # AmpersandIO.printMessage(f"Target yPlus:{target_yPlus}")
+        # AmpersandIO.printMessage(f'Reynolds number:{U*L/nu}')
+        # AmpersandIO.printMessage(f"Boundary layer thickness:{delta}")
+        # AmpersandIO.printMessage(f"First layer thickness:{adjustedNearWallThickness}")
+        # AmpersandIO.printMessage(f"Final layer thickness:{finalLayerThickness}")
+        # AmpersandIO.printMessage(f"YPlus:{adjustedYPlus}")
+        # AmpersandIO.printMessage(f"Number of layers:{nLayers}")

@@ -606,14 +606,34 @@ class AmpersandDataInput:
         return fluid
 
     @staticmethod
-    def get_mesh_refinement_level():
-        refLevel = AmpersandIO.get_input_int(
+    def get_mesh_refinement_amount():
+        ref_amounts = ["coarse", "medium", "fine"]
+        ref_amount_index = AmpersandIO.get_input_int(
             "Enter the mesh refinement (0: coarse, 1: medium, 2: fine): ")
-        if refLevel not in [0, 1, 2]:
+        if ref_amount_index not in [0, 1, 2]:
             AmpersandIO.printMessage(
                 "Invalid mesh refinement level. Defaulting to medium.")
-            refLevel = 1
-        return refLevel
+            ref_amount_index = 1
+        return ref_amounts[ref_amount_index]
+
+
+    @staticmethod
+    def get_property(purpose='wall'):
+        if purpose == 'inlet':
+            U = AmpersandDataInput.get_inlet_values()
+            return tuple(U)
+        elif purpose == 'refinementRegion':
+            refLevel = AmpersandIO.get_input_int("Enter refinement level: ")
+            return refLevel
+        elif purpose == 'cellZone':
+            refLevel = AmpersandIO.get_input_int("Enter refinement level: ")
+            createPatches = AmpersandIO.get_input_bool(
+                "Create patches for this cellZone? (y/N): ")
+            # 0 is just a placeholder for listing the patches
+            return (refLevel, createPatches, 0)
+        elif purpose == 'refinementSurface':
+            refLevel = AmpersandIO.get_input_int("Enter refinement level: ")
+            return refLevel
 
 
 if __name__ == "__main__":

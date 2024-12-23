@@ -42,21 +42,17 @@ def open_project():
     while modify_project:
         modification_type = AmpersandDataInput.choose_modification_categorized()
         ModProject.modify_project(project, modification_type)
-        project.write_settings()
+        ProjectService.write_settings(project)
+        
         project_modified = True
         modify_project = AmpersandIO.get_input_bool("Do you want to modify another settings (y/N)?: ")
     # project.choose_modification()
     if project_modified:  # if the project is modified at least once
-        AmpersandIO.printMessage(
-            "Generating the project files based on the new settings")
-        # if everything is successful, write the settings to the project_settings.yaml file
-        project.write_settings()
-        # Then create the project files with the new settings
-        project.write_project_files()
+        AmpersandIO.printMessage("Generating the project files based on the new settings")
+        ProjectService.write_project(project)
+
     else:
-        AmpersandIO.printMessage(
-            "No modifications were made to the project settings")
-    return 0
+        AmpersandIO.printMessage("No modifications were made to the project settings")
 
 
 if __name__ == '__main__':

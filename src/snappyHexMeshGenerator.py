@@ -51,6 +51,8 @@ addLayers       {meshSettings.snappyHexSteps.addLayers};"""
     # minRefinementRegionLevel = 2
     geometry_str = f"""\ngeometry\n{{"""
     for geometry_name, geometry in meshSettings.geometry.items():
+        patch_name = geometry_name.split('.')[0]
+
         # For STL surfaces, featureEdges and refinementSurfaces are added
         # maxRefinementLevel = max(maxRefinementLevel, geometry_patch.refineMax)
         if (isinstance(geometry, TriSurfaceMeshGeometry)):
@@ -58,12 +60,12 @@ addLayers       {meshSettings.snappyHexSteps.addLayers};"""
     {geometry_name}
     {{
         type {geometry.type};
-        name {geometry_name[:-4]};
+        name {patch_name};
         regions
         {{
-            {geometry_name[:-4]}
+            {patch_name}
             {{
-                name {geometry_name[:-4]};
+                name {patch_name};
             }}
         }}
     }}"""
@@ -72,18 +74,18 @@ addLayers       {meshSettings.snappyHexSteps.addLayers};"""
                 features += f"""
 
         {{
-            file \"{geometry_name[:-4]}.eMesh\";
+            file \"{patch_name}.eMesh\";
             level {geometry.featureLevel};
         }}"""
             if (geometry.purpose == 'inlet' or geometry.purpose == 'outlet'):
                 patchType = 'patch'
                 refinementSurfaces += f"""
-        {geometry_name[:-4]}
+        {patch_name}
         {{
             level (0 0);
             regions
             {{
-                {geometry_name[:-4]}
+                {patch_name}
                 {{
                     level ({geometry.refineMin} {geometry.refineMax});
                     patchInfo
@@ -97,22 +99,22 @@ addLayers       {meshSettings.snappyHexSteps.addLayers};"""
                 patchType = 'cellZone'
                 if geometry.property[1] == True:  # patches will be added
                     refinementSurfaces += f"""
-        {geometry_name[:-4]}
+        {patch_name}
         {{
             level (0 0);
-            cellZone {geometry_name[:-4]};
-            faceZone {geometry_name[:-4]};
+            cellZone {patch_name};
+            faceZone {patch_name};
             cellZoneInside inside;
             boundary internal;
             faceType boundary;
         }}"""
                 else:  # no patches. Just cellZone
                     refinementSurfaces += f"""
-        {geometry_name[:-4]}
+        {patch_name}
         {{
             level (0 0);
-            cellZone {geometry_name[:-4]};
-            faceZone {geometry_name[:-4]};
+            cellZone {patch_name};
+            faceZone {patch_name};
             cellZoneInside inside;
             boundary internal;
         }}"""
@@ -123,15 +125,15 @@ addLayers       {meshSettings.snappyHexSteps.addLayers};"""
             elif (geometry.purpose == 'baffle'):
                 patchType = 'wall'
                 refinementSurfaces += f"""
-        {geometry_name[:-4]}
+        {patch_name}
         {{
             level (0 0);
             regions
             {{
-                {geometry_name[:-4]}
+                {patch_name}
                 {{
                     faceType baffles;
-                    faceZone {geometry_name[:-4]};
+                    faceZone {patch_name};
                     level ({geometry.refineMin} {geometry.refineMax});
                 }}
             }}
@@ -140,12 +142,12 @@ addLayers       {meshSettings.snappyHexSteps.addLayers};"""
             else:
                 patchType = 'wall'
                 refinementSurfaces += f"""
-        {geometry_name[:-4]}
+        {patch_name}
         {{
             level (0 0);
             regions
             {{
-                {geometry_name[:-4]}
+                {patch_name}
                 {{
                     level ({geometry.refineMin} {geometry.refineMax});
                     patchInfo
@@ -162,8 +164,8 @@ addLayers       {meshSettings.snappyHexSteps.addLayers};"""
     {geometry_name}
     {{
         type {geometry.type};
-        min ({geometry.min[0]} {geometry.min[1]} {geometry.min[2]});
-        max ({geometry.max[0]} {geometry.max[1]} {geometry.max[2]});
+        min ({geometry.bbox.minx} {geometry.bbox.miny} {geometry.bbox.minz});
+        max ({geometry.bbox.maxx} {geometry.bbox.maxy} {geometry.bbox.maxz});
     }}"""
         geometry_str += added_geo
     geometry_str += f"""
@@ -172,6 +174,7 @@ addLayers       {meshSettings.snappyHexSteps.addLayers};"""
 
     refinementRegions = f""
     for geometry_name, geometry in meshSettings.geometry.items():
+        patch_name = geometry_name.split('.')[0]
         if (isinstance(geometry, SearchableBoxGeometry)):
             refinementRegions += f"""
         {geometry_name}
@@ -182,21 +185,21 @@ addLayers       {meshSettings.snappyHexSteps.addLayers};"""
         elif (isinstance(geometry, TriSurfaceMeshGeometry)):
             if (geometry.purpose == 'refinementSurface'):
                 refinementRegions += f"""
-        {geometry_name[:-4]}
+        {patch_name}
         {{
             mode distance;
             levels ((1E-4 {geometry.property}));
         }}"""
             elif (geometry.purpose == 'refinementRegion'):
                 refinementRegions += f"""
-        {geometry_name[:-4]}
+        {patch_name}
         {{
             mode inside;
             levels ((1E15 {geometry.property}));
         }}"""
             elif (geometry.purpose == 'cellZone'):
                 refinementRegions += f"""
-        {geometry_name[:-4]}
+        {patch_name}
         {{
             mode inside;
             levels ((1E15 {geometry.property[0]}));
@@ -246,22 +249,23 @@ addLayers       {meshSettings.snappyHexSteps.addLayers};"""
     layers
     {{"""
     for geometry_name, geometry in meshSettings.geometry.items():
+        patch_name = geometry_name.split('.')[0]
         if (isinstance(geometry, TriSurfaceMeshGeometry)):
             if (geometry.purpose == 'wall'):  # If the surface is a wall, add layers
                 layerControls += f"""
-            "{geometry_name[:-4]}.*"
+            "{patch_name}.*"
             {{
                 nSurfaceLayers {geometry.nLayers};
             }}"""
             elif (geometry.purpose == 'baffle'):  # If the surface is a baffle, add layers
                 layerControls += f"""
-            "{geometry_name[:-4]}.*"
+            "{patch_name}.*"
             {{
                 nSurfaceLayers {1};
             }}"""
             elif (geometry.purpose == 'cellZone'):
                 layerControls += f"""
-            "{geometry_name[:-4]}.*"
+            "{patch_name}.*"
             {{
                 nSurfaceLayers {1};
             }}"""

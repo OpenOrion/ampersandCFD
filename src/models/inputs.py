@@ -1,6 +1,7 @@
 from pathlib import Path
 from typing import Optional, Union
 from pydantic import BaseModel, Field
+from src.models.settings import RefinementAmount
 
 PathLike = Union[str, Path]
 
@@ -20,7 +21,7 @@ class StlInputModel(BaseModel):
 
 class ProjectInputModel(BaseModel):
     project_path: PathLike
-    refinement_level: int
+    refinement_amount: RefinementAmount
     is_internal_flow: bool
     on_ground: Optional[bool] = None
     fluid_properties: FluidPhysicalProperties

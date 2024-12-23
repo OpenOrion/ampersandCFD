@@ -18,16 +18,18 @@
 """
 
 
+from typing import Literal
 from src.models.settings import BoundingBox, Domain
 from src.primitives import AmpersandDataInput, AmpersandIO, AmpersandUtils
 from src.project import AmpersandProject
 from src.utils.stl_analysis import StlAnalysis
 
+ModificationType = Literal["Background Mesh", "Mesh Point", "Add Geometry", "Refinement Levels", "Boundary Conditions", "Fluid Properties", "Numerical Settings", "Simulation Control Settings", "Turbulence Model", "Post Processing Settings"]
 
 # A collection of functions that are used to modify the project
 class ModProject:
     @staticmethod
-    def modify_project(project: AmpersandProject, modification_type: str):
+    def modify_project(project: AmpersandProject, modification_type: ModificationType):
         if modification_type == "Background Mesh":
             ModProject.change_background_mesh(project)
         elif modification_type == "Mesh Point":
@@ -56,16 +58,13 @@ class ModProject:
     @staticmethod
     # this is to change the global refinement level of the mesh
     def change_macro_refinement_level(project: AmpersandProject):
-        refLevels = ["coarse", "medium", "fine"]
-        AmpersandIO.printMessage(
-            "Current refinement level: "+refLevels[project.settings.mesh.fineLevel])
-        # ampersandIO.printMessage("Refinement level is the number of cells in the smallest direction")
-        refinementLevel = AmpersandIO.get_input_int("Enter new refinement level (0:coarse, 1:medium, 2:fine): ")
-        if (refinementLevel < 0 or refinementLevel > 2):
+        ref_amounts = ["coarse", "medium", "fine"]
+        AmpersandIO.printMessage(f"Current refinement level: {ref_amounts[project.settings.mesh.refAmount]}")
+        ref_amount_index = AmpersandIO.get_input_int("Enter new refinement level (0:coarse, 1:medium, 2:fine): ")
+        if (ref_amount_index < 0 or ref_amount_index > 2):
             AmpersandIO.printMessage("Invalid refinement level, please enter the value again")
             ModProject.change_refinement_levels(project)
-        project.settings.mesh.fineLevel = refinementLevel
-        # return project
+        project.settings.mesh.refAmount = ref_amounts[ref_amount_index]
 
     @staticmethod
     def change_domain_size(project: AmpersandProject, bounds: BoundingBox):

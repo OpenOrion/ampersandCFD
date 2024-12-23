@@ -20,6 +20,9 @@
 from pydantic import BaseModel
 from typing import Dict, List, Literal, Union, Optional
 
+RefinementAmount = Literal["coarse", "medium", "fine"]
+
+
 class BoundingBox(BaseModel):
     minx: float
     maxx: float
@@ -82,7 +85,6 @@ class BoundingBox(BaseModel):
         y_length = self.maxy - self.miny
         z_length = self.maxz - self.minz
 
-
         return BoundingBox(
             minx = self.minx + xmin_factor*x_length,
             maxx = self.maxx + xmax_factor*x_length,
@@ -91,6 +93,22 @@ class BoundingBox(BaseModel):
             minz = self.minz + zmin_factor*z_length,
             maxz = self.maxz + zmax_factor*z_length
         )
+
+    @staticmethod
+    def update(current: "BoundingBox", size: "BoundingBox"):
+        """
+        Update the bounding box coordinates with the given size.
+        """
+        return BoundingBox(
+            minx=min(size.minx, current.minx),
+            maxx=max(size.maxx, current.maxx),
+            miny=min(size.miny, current.miny),
+            maxy=max(size.maxy, current.maxy),
+            minz=min(size.minz, current.minz),
+            maxz=max(size.maxz, current.maxz),
+        )
+
+
 
 
 class Domain(BoundingBox):
@@ -110,15 +128,36 @@ class Domain(BoundingBox):
             f"Background mesh size: {self.nx}x{self.ny}x{self.nz} cells\n"
         )
 
+    @staticmethod
+    def from_bbox(bbox: BoundingBox, nx: int, ny: int, nz: int):
+        return Domain(
+            minx=bbox.minx,
+            maxx=bbox.maxx,
+            miny=bbox.miny,
+            maxy=bbox.maxy,
+            minz=bbox.minz,
+            maxz=bbox.maxz,
+            nx=nx,
+            ny=ny,
+            nz=nz,
+        )
+
+    @property
+    def bbox(self):
+        return BoundingBox(
+            minx=self.minx,
+            maxx=self.maxx,
+            miny=self.miny,
+            maxy=self.maxy,
+            minz=self.minz,
+            maxz=self.maxz
+        )
+
 
     @staticmethod
     def update(current: "Domain", domain_size: "BoundingBox", nx: Optional[int] = None, ny: Optional[int] = None, nz: Optional[int] = None):
         """
         Update the bounding box coordinates with the given domain size.
-
-        Args:
-            domain_size (BoundingBox): The domain size to update with.
-            current_domain (BoundingBox): The bounding box to be updated.
         """
 
         return Domain(
@@ -134,13 +173,13 @@ class Domain(BoundingBox):
         )
 
 
-
+Number = Union[int, float]
 BCPatchType = Literal['patch', 'wall', 'inlet', 'outlet', 'symmetry']
 PatchPurpose = Literal['inlet', 'outlet', 'symmetry', 'wall', 'searchableBox', 'refinementSurface', 'refinementRegion', 'cellZone', 'baffles', 'symmetry','cyclic','empty']
-
+PatchProperty = Union[tuple[Number, Number, Number], Number, None]
 class Patch(BaseModel):
     purpose: PatchPurpose
-    property: Optional[Union[tuple[float, float, float], None, float]] = None
+    property: PatchProperty = None
     
 
 class BCPatch(Patch):
@@ -158,8 +197,7 @@ class TriSurfaceMeshGeometry(Patch):
 
 class SearchableBoxGeometry(Patch):
     type: Literal["searchableBox"] = "searchableBox"
-    min: List[float]
-    max: List[float]
+    bbox: BoundingBox
     refineMax: int
 
 
@@ -235,13 +273,14 @@ class MeshQualityControls(BaseModel):
 class MeshSettings(BaseModel):
     domain: Domain = Domain()
     scale: float = 1.0
-    internalFlow: bool = False
     maxCellSize: float = 0.5
-    fineLevel: int = 1
+    refAmount: RefinementAmount = "coarse"
+
     onGround: bool = False
     halfModel: bool = False
+    internalFlow: bool = False
 
-    patches: Dict[str, BCPatch] = {
+    patches: dict[str, BCPatch] = {
         'inlet': BCPatch(type='patch', purpose='inlet',
                          property=(1, 0, 0), faces=[0, 4, 7, 3]),
         'outlet': BCPatch(type='patch', purpose='outlet',
