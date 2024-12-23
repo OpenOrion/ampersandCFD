@@ -18,51 +18,35 @@
 """
 
 from pathlib import Path
-from src.cli.mod_project import ModProject
-from src.primitives import AmpersandDataInput, AmpersandUtils, AmpersandIO
+from src.services.mod_service import ModService
+from src.utils.data_input import AmpersandDataInput, IOUtils
 
 from src.services.project_service import ProjectService
 
 def open_project():
-    AmpersandIO.printMessage("Please select the project directory to open")
+    IOUtils.print("Please select the project directory to open")
     
-    parent_directory = AmpersandUtils.ask_for_directory()
-    project_name = AmpersandIO.get_input("Enter the project name: ")
+    parent_directory = IOUtils.ask_for_directory()
+    project_name = IOUtils.get_input("Enter the project name: ")
     project_path = Path(f"{parent_directory}/{project_name}")
 
 
     project = ProjectService.load_project(project_path)
 
-    AmpersandIO.printMessage("Project loaded successfully")
+    IOUtils.print("Project loaded successfully")
     project.summarize_project()
-    modify_project = AmpersandIO.get_input_bool(
-        "Do you want to modify the project settings (y/N)?: ")
-    project_modified = False  # flag to check if the project has been modified
+    modify_project = IOUtils.get_input_bool("Do you want to modify the project settings (y/N)?: ")
    
     while modify_project:
         modification_type = AmpersandDataInput.choose_modification_categorized()
-        ModProject.modify_project(project, modification_type)
+        ModService.modify_project(project, modification_type)
         ProjectService.write_settings(project)
         
-        project_modified = True
-        modify_project = AmpersandIO.get_input_bool("Do you want to modify another settings (y/N)?: ")
-    # project.choose_modification()
-    if project_modified:  # if the project is modified at least once
-        AmpersandIO.printMessage("Generating the project files based on the new settings")
+        modify_project = IOUtils.get_input_bool("Do you want to modify another settings (y/N)?: ")
+    
+    if modify_project:  # if the project is modified at least once
+        IOUtils.print("Generating the project files based on the new settings")
         ProjectService.write_project(project)
 
     else:
-        AmpersandIO.printMessage("No modifications were made to the project settings")
-
-
-if __name__ == '__main__':
-    # Specify the output YAML file
-    try:
-        open_project()
-    except KeyboardInterrupt:
-        AmpersandIO.printMessage(
-            "\nKeyboardInterrupt detected! Aborting project creation")
-        exit()
-    # except Exception as error:
-    #    ampersandIO.printError(error)
-    #    exit()
+        IOUtils.print("No modifications were made to the project settings")

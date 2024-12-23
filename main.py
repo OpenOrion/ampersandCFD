@@ -18,11 +18,11 @@
 """
 
 import os
-from src.primitives import AmpersandIO
+from src.utils.data_input import IOUtils
 from src.cli.create_project import create_project
 from src.cli.open_project import open_project
-from src.headers import AMPERSAND_HEADER
 from src.utils.watch_sim import watch_sim
+from src.utils.generation import AMPERSAND_HEADER
 import argparse
 
 
@@ -40,43 +40,36 @@ def main():
     # Clear the screen
     os.system('cls' if os.name == 'nt' else 'clear')
 
-    AmpersandIO.printMessage(AMPERSAND_HEADER)
+    IOUtils.print(AMPERSAND_HEADER)
 
     if args.create:
         try:
             create_project()
         except KeyboardInterrupt:
-            AmpersandIO.printMessage(
+            IOUtils.print(
                 "\nKeyboardInterrupt detected! Aborting project creation")
             exit()
         except Exception as error:
-            AmpersandIO.printError(error)
+            IOUtils.error(error)
     elif args.open:
         try:
             open_project()
         except KeyboardInterrupt:
-            AmpersandIO.printMessage(
+            IOUtils.print(
                 "\nKeyboardInterrupt detected! Aborting project creation")
             exit()
         except Exception as error:
-            AmpersandIO.printError(error)
+            IOUtils.error(error)
     elif args.post:
         try:
             watch_sim()
         except KeyboardInterrupt:
-            AmpersandIO.printMessage(
+            IOUtils.print(
                 "\nKeyboardInterrupt detected! Aborting project creation")
             exit()
         except Exception as error:
-            AmpersandIO.printError(error)
+            IOUtils.error(error)
     else:
-        AmpersandIO.printMessage(
+        IOUtils.print(
             "Please specify an action to perform. Use --help for more information.")
         parser.print_help()
-
-
-if __name__ == '__main__':
-    # Specify the output YAML file
-    main()
-    # open_project()
-    # create_project()

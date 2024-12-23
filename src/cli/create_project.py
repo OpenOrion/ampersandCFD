@@ -19,39 +19,39 @@
 """
 
 from pathlib import Path
-from src.cli.mod_project import ModProject
-from src.models.inputs import FLUID_PYSICAL_PROPERTIES, FluidPhysicalProperties, ProjectInputModel, StlInputModel
-from src.primitives import AmpersandDataInput, AmpersandUtils, AmpersandIO
+from src.services.mod_service import ModService
+from src.models.inputs import FLUID_PYSICAL_PROPERTIES, ProjectInputModel, StlInputModel
+from src.utils.data_input import AmpersandDataInput, IOUtils
 from src.services.project_service import ProjectService
 
 
 def create_project():
     
-    parent_directory = AmpersandUtils.ask_for_directory()
-    project_name = AmpersandIO.get_input("Enter the project name: ")
+    parent_directory = IOUtils.ask_for_directory()
+    project_name = IOUtils.get_input("Enter the project name: ")
     project_path = Path(f"{parent_directory}/{project_name}")
 
-    AmpersandIO.printMessage(f"Project path: {project_path}")
+    IOUtils.print(f"Project path: {project_path}")
 
     project = ProjectService.create_project(project_path)
 
-    AmpersandIO.printMessage("Preparing for mesh generation")
+    IOUtils.print("Preparing for mesh generation")
 
     refinement_amount = AmpersandDataInput.get_mesh_refinement_amount()
     project.set_refinement_amount(refinement_amount)
 
-    ModProject.add_geometry(project)
+    ModService.add_geometry(project)
 
     # Before creating the project files, the settings are flushed to the project_settings.yaml file
 
-    is_internal_flow = AmpersandIO.get_input("Internal or External Flow (I/E)?: ").lower() == 'i'
+    is_internal_flow = IOUtils.get_input("Internal or External Flow (I/E)?: ").lower() == 'i'
     project.set_flow_type(is_internal_flow)
 
     if (not is_internal_flow):
-        on_ground_type = AmpersandIO.get_input_bool("Is the ground touching the body (y/N): ")
+        on_ground_type = IOUtils.get_input_bool("Is the ground touching the body (y/N): ")
         project.set_on_ground(on_ground_type)
 
-    AmpersandIO.printMessage( "Fluid properties and inlet values are necessary for mesh size calculations")
+    IOUtils.print( "Fluid properties and inlet values are necessary for mesh size calculations")
 
     fluid = AmpersandDataInput.choose_fluid_properties()
     project.set_fluid_properties(fluid)
@@ -59,17 +59,27 @@ def create_project():
     U = AmpersandDataInput.get_inlet_values()
     project.set_inlet_values(U)
 
-    transient = AmpersandIO.get_input("Transient or Steady State (T/S)?: ").lower() == 't'
-    project.set_transient_settings(transient)
+    is_transient = IOUtils.get_input("Transient or Steady State (T/S)?: ").lower() == 't'
 
-    n_core = AmpersandIO.get_input_int("Number of cores for parallel simulation: ")
+    if (is_transient):
+        endTime = IOUtils.get_input_int("End time: ")
+        writeInterval = IOUtils.get_input_int("Write interval: ")
+        deltaT = IOUtils.get_input_int("Time step: ")
+        project.set_transient_settings(is_transient, endTime, writeInterval, deltaT)
+    else:
+        project.set_is_transient(is_transient)
+
+
+
+
+    n_core = IOUtils.get_input_int("Number of cores for parallel simulation: ")
     project.set_parallel(n_core)
 
-    half_model = AmpersandIO.get_input_bool("Half Model (y/N)?: ")
+    half_model = IOUtils.get_input_bool("Half Model (y/N)?: ")
     project.set_half_model(half_model)
 
 
-    useFOs = AmpersandIO.get_input_bool(
+    useFOs = IOUtils.get_input_bool(
         "Use function objects for post-processing (y/N)?: ")
     project.set_post_process_settings(useFOs)
 
@@ -79,7 +89,7 @@ def create_project():
 
 
 def write_project(project_input: ProjectInputModel):
-    AmpersandIO.printMessage(f"Creating project at {project_input.project_path}")
+    IOUtils.print(f"Creating project at {project_input.project_path}")
     project = ProjectService.create_project(project_input.project_path)
     project.set_refinement_amount(project_input.refinement_amount)
 
@@ -90,7 +100,10 @@ def write_project(project_input: ProjectInputModel):
 
     project.set_fluid_properties(project_input.fluid_properties)
     project.set_inlet_values(project_input.inlet_values)
-    project.set_transient_settings(project_input.is_transient)
+    if not project_input.transient:
+        project.set_is_transient(False)
+    else:
+        project.set_transient_settings(True, project_input.transient.end_time, project_input.transient.write_interval, project_input.transient.time_step)
     project.set_parallel(project_input.n_core)
     project.set_half_model(project_input.is_half_model)
     
@@ -115,7 +128,7 @@ if __name__ == '__main__':
         is_half_model=True,
         is_internal_flow=False,
         use_function_objects=True,
-        is_transient=False,
+        transient=False,
         stl_files=[
             StlInputModel(stl_path=Path("/workspaces/ampersandCFD/stl/ahmed.stl"), purpose="wall")
         ]

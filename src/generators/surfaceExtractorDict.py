@@ -39,13 +39,3 @@ writeObj            yes;
 writeSets           no;
 }}"""
     return surfaceDict
-
-if __name__ == "__main__":
-    from src.primitives import AmpersandUtils
-
-    meshSettings = MeshSettings.model_validate(
-        AmpersandUtils.yaml_to_dict('meshSettings.yaml'))
-    surfaceFeatureExtractDict = create_surfaceDict(
-        meshSettings, "surfaceFeatureExtractDict")
-    with open('surfaceFeatureExtractDict', 'w') as file:
-        file.write(surfaceFeatureExtractDict)

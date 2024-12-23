@@ -21,16 +21,16 @@
 # The boundary conditions are specified in the meshSettings.yaml file.
 # This is an early version of the script and will be updated in the future.
 # Brute force writing is used instead of a more elegant solution.
-# import yaml
-from src.primitives import AmpersandUtils
+
+from pathlib import Path
+from typing import Union
 from src.models.settings import BoundaryConditions, InletValues, SnappyHexMeshSettings, TriSurfaceMeshGeometry
 from src.utils.generation import GenerationUtils
-from src.utils.stl_analysis import StlAnalysis
+from src.utils.turbulence import TurbulenceUtils
 
 
 def create_u_file(meshSettings: SnappyHexMeshSettings, boundaryConditions: BoundaryConditions):
-    header = GenerationUtils.createFoamHeader(
-        className="volVectorField", objectName="U")
+    header = GenerationUtils.createFoamHeader(className="volVectorField", objectName="U")
     dims = GenerationUtils.createDimensions(M=0, L=1, T=-1)
     internalField = GenerationUtils.createInternalFieldVector(
         type="uniform", value=boundaryConditions.velocityInlet.u_value)
@@ -134,8 +134,7 @@ def create_u_file(meshSettings: SnappyHexMeshSettings, boundaryConditions: Bound
 
 
 def create_p_file(meshSettings: SnappyHexMeshSettings, boundaryConditions: BoundaryConditions):
-    header = GenerationUtils.createFoamHeader(
-        className="volScalarField", objectName="p")
+    header = GenerationUtils.createFoamHeader(className="volScalarField", objectName="p")
     dims = GenerationUtils.createDimensions(M=0, L=2, T=-2)
     internalField = GenerationUtils.createInternalFieldScalar(
         type="uniform", value=0)
@@ -194,8 +193,8 @@ def create_p_file(meshSettings: SnappyHexMeshSettings, boundaryConditions: Bound
     """
 
     for geometry_name, geometry in meshSettings.geometry.items():
+        patch_name = geometry_name.split('.')[0]
         if (isinstance(geometry, TriSurfaceMeshGeometry)):
-            patch_name = geometry_name.split('.')[0]
             if (geometry.purpose == 'wall'):
                 p_file += f"""
    "{patch_name}.*"
@@ -243,9 +242,7 @@ def create_k_file(meshSettings: SnappyHexMeshSettings, boundaryConditions: Bound
             k_file += f"""
     {patch_name}"""
             if (patch.type == 'patch' and patch_name == 'inlet'):
-                Umag = AmpersandUtils.calc_Umag(boundaryConditions.velocityInlet.u_value)
-                I = 0.05  # turbulence intensity in %
-                k = 1.5*(Umag*I)**2
+                k = TurbulenceUtils.calc_k(boundaryConditions.velocityInlet.u_value, I=0.05)
                 k_file += f"""
     {{
         type {boundaryConditions.velocityInlet.k_type};
@@ -302,11 +299,7 @@ def create_k_file(meshSettings: SnappyHexMeshSettings, boundaryConditions: Bound
     """
             elif (geometry.purpose == 'inlet'):
                 if (geometry.bounds != None):
-                    charLen = geometry.bounds.max_length
-                    l = 0.07*charLen  # turbulent length scale
-                    Umag = AmpersandUtils.calc_Umag(geometry.property)
-                    I = 0.01  # turbulence intensity in %
-                    k = 1.5*(Umag*I)**2
+                    k = TurbulenceUtils.calc_k(geometry.property, I=0.01)
                 else:
                     k = 1.0e-6  # default value
                 k_file += f"""
@@ -349,13 +342,11 @@ def create_omega_file(meshSettings: SnappyHexMeshSettings, boundaryConditions: B
             omega_file += f"""
     {patch_name}"""
             if (patch.type == 'patch' and patch_name == 'inlet'):
-                Umag = AmpersandUtils.calc_Umag(
-                    boundaryConditions.velocityInlet.u_value)
-                I = 0.05  # turbulence intensity in %
-                k = 1.5*(Umag*I)**2
+
+                k = TurbulenceUtils.calc_k(boundaryConditions.velocityInlet.u_value, I=0.05)
                 nut = 100.*nu
-                omega = k/nu*(nut/nu)**(-1)
-                # add the omega boundary condition
+                omega =  k/nu*(nut/nu)**(-1)
+
                 omega_file += f"""
     {{
         type {boundaryConditions.velocityInlet.omega_type};
@@ -401,8 +392,8 @@ def create_omega_file(meshSettings: SnappyHexMeshSettings, boundaryConditions: B
     """
 
     for geometry_name, geometry in meshSettings.geometry.items():
+        patch_name = geometry_name.split('.')[0]
         if (isinstance(geometry, TriSurfaceMeshGeometry)):
-            patch_name = geometry_name.split('.')[0]
             if (geometry.purpose == 'wall'):
                 omega_file += f"""
     "{patch_name}.*"
@@ -415,9 +406,7 @@ def create_omega_file(meshSettings: SnappyHexMeshSettings, boundaryConditions: B
                 if (geometry.bounds is not None):
                     charLen = geometry.bounds.max_length
                     l = 0.07*charLen  # turbulent length scale
-                    Umag = AmpersandUtils.calc_Umag(geometry.property)
-                    I = 0.01  # turbulence intensity in %
-                    k = 1.5*(Umag*I)**2
+                    k = TurbulenceUtils.calc_k(geometry.property, I=0.01)
                     omega = 0.09**(-1./4.)*k**0.5/l
                 else:
                     omega = 1.0e-6  # default value
@@ -461,11 +450,8 @@ def create_epsilon_file(meshSettings: SnappyHexMeshSettings, boundaryConditions:
             epsilon_file += f"""
     {patch_name}"""
             if (patch.type == 'patch' and patch_name == 'inlet'):
-                Umag = AmpersandUtils.calc_Umag(
-                    boundaryConditions.velocityInlet.u_value
-                )
-                I = 0.05  # turbulence intensity in %
-                k = 1.5*(Umag*I)**2
+                k = TurbulenceUtils.calc_k(boundaryConditions.velocityInlet.u_value, I=0.05)
+
                 nut = 100.*nu
                 epsilon = 0.09*k**2/nu*(nut/nu)**(-1)
                 # add epsilon boundary condition
@@ -514,8 +500,8 @@ def create_epsilon_file(meshSettings: SnappyHexMeshSettings, boundaryConditions:
     """
 
     for geometry_name, geometry in meshSettings.geometry.items():
+        patch_name = geometry_name.split('.')[0]
         if (isinstance(geometry, TriSurfaceMeshGeometry)):
-            patch_name = geometry_name.split('.')[0]
             if (geometry.purpose == 'wall'):
                 epsilon_file += f"""
     "{patch_name}.*"
@@ -528,9 +514,7 @@ def create_epsilon_file(meshSettings: SnappyHexMeshSettings, boundaryConditions:
                 if (geometry.bounds != None):
                     charLen = geometry.bounds.max_length
                     l = 0.07*charLen  # turbulent length scale
-                    Umag = AmpersandUtils.calc_Umag(geometry.property)
-                    I = 0.01  # turbulence intensity in %
-                    k = 1.5*(Umag*I)**2
+                    k = TurbulenceUtils.calc_k(geometry.property, I=0.01)
                     epsilon = 0.09**(3./4.)*k**(3./2.)/l
                 else:
                     epsilon = 1.0e-6  # default value
@@ -662,7 +646,7 @@ def update_boundary_conditions(boundaryConditions: BoundaryConditions, inletValu
     return boundaryConditions
 
 
-def create_boundary_conditions(meshSettings: SnappyHexMeshSettings, boundaryConditions: BoundaryConditions, nu=1.e-5):
+def create_boundary_conditions(meshSettings: SnappyHexMeshSettings, boundaryConditions: BoundaryConditions, project_path: Union[str, Path]):
     """
     Create boundary condition files for an OpenFOAM pimpleFoam simulation.
 
@@ -677,24 +661,15 @@ def create_boundary_conditions(meshSettings: SnappyHexMeshSettings, boundaryCond
     omega_file = create_omega_file(meshSettings, boundaryConditions)
     epsilon_file = create_epsilon_file(meshSettings, boundaryConditions)
     nut_file = create_nut_file(meshSettings, boundaryConditions)
-    # print(p_file)
-    # print(u_file)
-    print("Creating boundary conditions files")
-    AmpersandUtils.write_to_file("U", u_file)
+    Path(project_path, "U").write_text(u_file)
 
-    AmpersandUtils.write_to_file("p", p_file)
+    Path(project_path, "p").write_text(p_file)
 
-    AmpersandUtils.write_to_file("k", k_file)
+    Path(project_path, "k").write_text(k_file)
 
-    AmpersandUtils.write_to_file("omega", omega_file)
+    Path(project_path, "omega").write_text(omega_file)
 
-    AmpersandUtils.write_to_file("epsilon", epsilon_file)
+    Path(project_path, "epsilon").write_text(epsilon_file)
 
-    AmpersandUtils.write_to_file("nut", nut_file)
+    Path(project_path, "nut").write_text(nut_file)
 
-
-# if __name__ == '__main__':
-#     meshSettings = SnappyHexMeshSettings.model_validate(
-#         AmpersandUtils.yaml_to_dict("examples/basic/meshSettings.yaml")
-#     )
-#     create_boundary_conditions(meshSettings, boundaryConditions)

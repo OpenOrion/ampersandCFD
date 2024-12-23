@@ -24,9 +24,9 @@ import vtk
 import numpy as np
 import math
 from src.models.settings import BoundingBox, Domain, MeshSettings, SearchableBoxGeometry, SimulationSettings, TriSurfaceMeshGeometry, RefinementAmount, PatchPurpose, PatchProperty
-from src.thirdparty.stlToOpenFOAM import find_inside_point, find_outside_point, is_point_inside, read_stl_file
+from src.thirdparty.stlToOpenFOAM import find_inside_point, is_point_inside, read_stl_file
 from src.thirdparty.stlToOpenFOAM import extract_curvature_data, compute_curvature
-from src.primitives import AmpersandIO
+from src.utils.data_input import IOUtils
 
 
 class StlAnalysis:
@@ -311,7 +311,7 @@ class StlAnalysis:
     @staticmethod 
     def set_stl_solid_name(stl_file: Union[str, Path]) -> int:
         stl_path = Path(stl_file)
-        AmpersandIO.printMessage(f"Setting solid name for {stl_path}")
+        IOUtils.print(f"Setting solid name for {stl_path}")
         
         if not stl_path.exists():
             raise FileNotFoundError(f"STL file not found: {stl_path}")

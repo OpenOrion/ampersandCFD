@@ -49,15 +49,3 @@ RAS
 """
     turbulencePropertiesDict += turbulenceProperties_
     return turbulencePropertiesDict
-
-
-if __name__ == "__main__":
-    physicalProperties = PhysicalProperties()
-    transportPropertiesDict = create_transportPropertiesDict(physicalProperties)
-    with open('outputs/transportProperties', 'w') as file:
-        file.write(transportPropertiesDict)
-    turbulencePropertiesDict = create_turbulencePropertiesDict(physicalProperties)
-    with open('outputs/turbulenceProperties', 'w') as file:
-        file.write(turbulencePropertiesDict)
-    print(transportPropertiesDict)
-    print(turbulencePropertiesDict)

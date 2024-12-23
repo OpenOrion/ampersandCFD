@@ -7,30 +7,19 @@ from PySide6.QtCore import QFile
 from PySide6.QtWidgets import QMainWindow
 from PySide6 import QtWidgets
 from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
-from src.cli.mod_project import ModProject
+from src.services.mod_service import ModService
 from src.gui.dialogBoxes import sphereDialogDriver, yesNoCancelDialogDriver
 # ----------------- VTK Libraries ----------------- #
 import vtk
 # noinspection PyUnresolvedReferences
-import vtkmodules.vtkRenderingOpenGL2
-from vtkmodules.vtkCommonColor import vtkNamedColors
-from vtkmodules.vtkFiltersSources import vtkSphereSource
 from vtkmodules.vtkInteractionWidgets import vtkOrientationMarkerWidget
-from vtkmodules.vtkRenderingAnnotation import vtkAxesActor
-from vtkmodules.vtkRenderingCore import (
-    vtkActor,
-    vtkPolyDataMapper,
-    vtkRenderWindow,
-    vtkRenderWindowInteractor,
-    vtkRenderer
-)
 # ------------------------------------------------- #
 import sys
 from time import sleep
 
 # Connection to the Ampersand Backend
 from project import AmpersandProject
-from src.primitives import AmpersandDataInput, AmpersandUtils, AmpersandIO
+from src.utils.data_input import IOUtils
 from src.services.project_service import ProjectService
 
 
@@ -56,7 +45,7 @@ def readSTL(stlFileName="cylinder.stl"):
 
 
 # This is the main window class
-class mainWindow(QMainWindow):
+class MainWindow(QMainWindow):
     project: AmpersandProject
     def __init__(self):
         super().__init__()
@@ -145,6 +134,9 @@ class mainWindow(QMainWindow):
         self.prepare_vtk()
         self.prepare_subWindows()
         self.prepare_events()
+
+        IOUtils.window = self
+        IOUtils.GUIMode = True
 
     def __del__(self):
         pass
@@ -327,7 +319,7 @@ class mainWindow(QMainWindow):
         self.iren.Start()
 
     def loadSTL(self, stlFile=r"C:\Users\mrtha\Desktop\GitHub\foamAutoGUI\src\pipe.stl"):
-        AmpersandIO.printMessage("Loading STL file")
+        IOUtils.print("Loading STL file")
         stl_name = stlFile.split("/")[-1]
         if (stl_name in self.surfaces):
             self.updateStatusBar("STL file already loaded")
@@ -348,7 +340,6 @@ class mainWindow(QMainWindow):
     def updatePropertyBox(self):
         # find the selected item in the list
         item = self.window.listWidgetObjList.currentItem()
-        idx = self.window.listWidgetObjList.row(item)
         print("Selected Item: ", item.text())
 
     def updateStatusBar(self, message="Go!"):
@@ -389,18 +380,18 @@ class mainWindow(QMainWindow):
         # self.updateStatusBar("Opening STL")
         # self.openSTL()
         # self.readyStatusBar()
-        ModProject.add_geometry(self.project)
+        ModService.add_geometry(self.project)
         self.showSTL(stlFile=self.project.current_stl_file)
         self.update_list()
         # self.project.list_stl_files()
 
     def createSphere(self):
         # print("Create Sphere")
-        AmpersandIO.printMessage("Creating Sphere")
+        IOUtils.print("Creating Sphere")
         # create a sphere dialog
         sphereData = sphereDialogDriver()
         if sphereData == None:
-            AmpersandIO.printError("Sphere Dialog Box Closed")
+            IOUtils.error("Sphere Dialog Box Closed")
         else:
             x, y, z, r = sphereData
             print("Center: ", x, y, z)
@@ -434,7 +425,7 @@ class mainWindow(QMainWindow):
                 "Save changes to current case files before creating a New Case", "Save Changes")
             if yNC == 1:  # if yes
                 # save the project
-                self.project.add_stl_to_project()
+                self.project.add_stl_file()
                 ProjectService.write_settings(self.project)
 
                 self.disableButtons()
@@ -454,11 +445,11 @@ class mainWindow(QMainWindow):
         self.ren.RemoveAllViewProps()
         # clear the list widget
         self.window.listWidgetObjList.clear()
-        AmpersandIO.window = self.window
-        AmpersandIO.GUIMode = True
+        IOUtils.window = self.window
+        IOUtils.GUIMode = True
 
-        parent_directory = AmpersandUtils.ask_for_directory(qt=True)
-        project_name = AmpersandIO.get_input("Enter the project name: ")
+        parent_directory = IOUtils.ask_for_directory(qt=True)
+        project_name = IOUtils.get_input("Enter the project name: ")
         project_path = f"{parent_directory}/{project_name}"
 
         self.project = ProjectService.create_project(project_path)
@@ -469,7 +460,7 @@ class mainWindow(QMainWindow):
         self.enableButtons()
         self.readyStatusBar()
         self.project_opened = True
-        AmpersandIO.printMessage(
+        IOUtils.print(
             f"Project {project_name} created")
 
         # change window title
@@ -490,7 +481,7 @@ class mainWindow(QMainWindow):
                 self.ren.RemoveAllViewProps()
             elif yNC == -1:  # if no
                 # close the project
-                self.project = None
+                self.project = None # type: ignore
                 self.project_opened = False
                 self.disableButtons()
                 self.ren.RemoveAllViewProps()
@@ -498,18 +489,16 @@ class mainWindow(QMainWindow):
                 self.readyStatusBar()
                 return
         self.updateStatusBar("Opening Case")
-        AmpersandIO.window = self
-        AmpersandIO.GUIMode = True
 
         # clear vtk renderer
         self.ren.RemoveAllViewProps()
         # clear the list widget
         self.window.listWidgetObjList.clear()
         
-        project_path = AmpersandUtils.ask_for_directory(qt=True)
-
-        AmpersandIO.printMessage(f"Project path: {project_path}")
-        AmpersandIO.printMessage("Loading the project")
+        project_path = IOUtils.ask_for_directory(qt=True)
+        assert project_path is not None, "Project Path not selected"
+        IOUtils.print(f"Project path: {project_path}")
+        IOUtils.print("Loading the project")
 
         self.project = ProjectService.load_project(project_path)
 
@@ -522,7 +511,7 @@ class mainWindow(QMainWindow):
             self.showSTL(stlFile=stl_file)
         self.readyStatusBar()
         self.project_opened = True
-        AmpersandIO.printMessage(
+        IOUtils.print(
             f"Project {self.project.name} created")
 
         # change window title
@@ -539,8 +528,6 @@ class mainWindow(QMainWindow):
         self.readyStatusBar()
 
     def autoDomain(self):
-        # self.project.adjust_domain_size()
-        # if self.project.internalFlow==False:
         onGround = self.window.checkBoxOnGround.isChecked()
         self.project.settings.mesh.onGround = onGround
         self.project.on_ground = onGround
@@ -577,11 +564,11 @@ class mainWindow(QMainWindow):
         ny = int(self.window.lineEdit_nY.text())
         nz = int(self.window.lineEdit_nZ.text())
         if (nx <= 0 or ny <= 0 or nz <= 0):
-            AmpersandIO.printError("Invalid Domain Size")
+            IOUtils.error("Invalid Domain Size")
             self.readyStatusBar()
             return
         if (minx > maxx or miny > maxy or minz > maxz):
-            AmpersandIO.printError("Invalid Domain Size")
+            IOUtils.error("Invalid Domain Size")
             self.readyStatusBar()
             return
         self.project.settings.mesh.domain.minx = minx
@@ -606,7 +593,7 @@ class mainWindow(QMainWindow):
 def main():
 
     app = QApplication(sys.argv)
-    w = mainWindow()
+    w = MainWindow()
     w.window.show()
     app.exec()
 

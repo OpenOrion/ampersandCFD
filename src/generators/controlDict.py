@@ -48,10 +48,3 @@ libs
 (
 );
 """
-
-
-# Generate controlDict
-if __name__ == '__main__':
-    control_settings = ControlSettings()
-    controlDict = createControlDict(control_settings)
-    print(controlDict)

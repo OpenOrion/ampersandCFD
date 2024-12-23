@@ -18,7 +18,7 @@
 """
 
 from typing import Literal, Union
-from src.primitives import AmpersandIO
+from src.utils.data_input import IOUtils
 from src.models.settings import MeshSettings, PostProcessSettings
 
 
@@ -154,7 +154,7 @@ streamLines
 
     @staticmethod
     def get_probe_location():
-        probeLocation = AmpersandIO.get_input_vector(
+        probeLocation = IOUtils.get_input_vector(
             "Enter probe location (x y z): ")
         return probeLocation
 

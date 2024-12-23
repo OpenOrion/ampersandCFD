@@ -1,4 +1,3 @@
-# %%
 """
 -------------------------------------------------------------------------------
   ***    *     *  ******   *******  ******    *****     ***    *     *  ******   
@@ -71,20 +70,3 @@ mergePatchPairs
 
 // ************************************************************************* //
 """
-
-
-# Generate blockMeshDict
-# read in data to meshSettings from meshSettings.yaml
-if __name__ == "__main__":
-    from src.primitives import AmpersandUtils
-
-    meshSettings = SnappyHexMeshSettings.model_validate(AmpersandUtils.yaml_to_dict("examples/basic/meshSettings.yaml"))
-    blockMeshDict = create_blockMeshDict(meshSettings)
-
-    # Save to file
-    with open("outputs/blockMeshDict", "w") as f:
-        f.write(blockMeshDict)
-
-    print("blockMeshDict file created.")
-
-# %%

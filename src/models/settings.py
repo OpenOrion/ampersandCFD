@@ -17,11 +17,14 @@
  */
 """
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Dict, List, Literal, Union, Optional
 
-RefinementAmount = Literal["coarse", "medium", "fine"]
 
+RefinementAmount = Literal["coarse", "medium", "fine"]
+class FluidProperties(BaseModel):
+    rho: float
+    nu: float
 
 class BoundingBox(BaseModel):
     minx: float
@@ -307,8 +310,7 @@ class SnappyHexMeshSettings(MeshSettings):
 
 
 class PhysicalProperties(BaseModel):
-    rho: float = 1.0
-    nu: float = 1.0e-6
+    fluid: FluidProperties = Field(default_factory=lambda: FluidProperties(rho=1.0, nu=1.0e-6))
     g: List[float] = [0, 0, -9.81]
     pRef: int = 0
     Cp: int = 1000
@@ -316,6 +318,14 @@ class PhysicalProperties(BaseModel):
     Pr: float = 0.7
     TRef: int = 300
     turbulenceModel: str = 'kOmegaSST'
+
+    @property
+    def nu(self):
+        return self.fluid.nu
+    
+    @property
+    def rho(self):
+        return self.fluid.rho
 
 
 class DdtSchemes(BaseModel):

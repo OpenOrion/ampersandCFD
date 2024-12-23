@@ -18,7 +18,6 @@
 """
 
 from src.models.settings import SearchableBoxGeometry, TriSurfaceMeshGeometry, SnappyHexMeshSettings
-from src.primitives import AmpersandUtils
 from src.utils.generation import GenerationUtils
 
 
@@ -320,18 +319,4 @@ mergeTolerance {meshSettings.mergeTolerance};"""
     snappyHexMeshDict += header+steps+geometry_str+castellatedMeshControls + \
         snapControls+layerControls+meshQualityControls+debug
     return snappyHexMeshDict
-
-
-# Example usage
-if __name__ == "__main__":
-    meshSettings = SnappyHexMeshSettings.model_validate(
-        AmpersandUtils.yaml_to_dict("examples/basic/meshSettings.yaml")
-    )
-
-    snappy_hex_mesh_dict_content = create_snappyHexMeshDict(meshSettings)
-    with open("outputs/snappyHexMeshDict", "w") as f:
-        f.write(snappy_hex_mesh_dict_content)
-    print("snappyHexMeshDict file created.")
-
-
 
