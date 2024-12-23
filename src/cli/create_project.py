@@ -108,7 +108,7 @@ def write_project(project_input: ProjectInputModel):
     project.set_half_model(project_input.is_half_model)
     
     for stl_file in project_input.stl_files:
-            project.add_stl_file(stl_file.stl_path, stl_file.purpose)
+        ProjectService.add_stl_file(project, stl_file.stl_path, stl_file.property, stl_file.purpose)
 
     
     project.set_post_process_settings(project_input.use_function_objects)

@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Literal, Optional, Union
 from pydantic import BaseModel, Field
-from src.models.settings import RefinementAmount, FluidProperties
+from src.models.settings import RefinementAmount, FluidProperties, PatchPurpose, PatchProperty
 
 PathLike = Union[str, Path]
 
@@ -14,7 +14,8 @@ FLUID_PYSICAL_PROPERTIES = {
 
 class StlInputModel(BaseModel):
     stl_path: PathLike
-    purpose: str
+    purpose: PatchPurpose
+    property: Optional[PatchProperty] = None
 
 class TransientSettings(BaseModel):
     end_time: int

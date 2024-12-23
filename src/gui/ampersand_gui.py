@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Union
+from typing import Optional, Union
 from PySide6.QtWidgets import QApplication
 from PySide6.QtUiTools import QUiLoader
 from PySide6.QtWidgets import QVBoxLayout
@@ -50,6 +50,7 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.load_ui()
+        self.current_stl_path: Optional[Path] = None
         self.surfaces = []
         self.project_opened = False
         self.minx, self.miny, self.minz = 0.0, 0.0, 0.0
@@ -400,7 +401,6 @@ class MainWindow(QMainWindow):
 
     def chooseInternalFlow(self):
         # print("Choose Internal Flow")
-        self.project.internalFlow = True
         self.project.settings.mesh.internalFlow = True
         self.window.checkBoxOnGround.setEnabled(False)
         self.updateStatusBar("Choosing Internal Flow")
@@ -408,7 +408,6 @@ class MainWindow(QMainWindow):
         self.readyStatusBar()
 
     def chooseExternalFlow(self):
-        self.project.internalFlow = False
         self.project.settings.mesh.internalFlow = False
         self.window.checkBoxOnGround.setEnabled(True)
         self.project.settings.mesh.onGround = self.window.checkBoxOnGround.isChecked(
@@ -425,7 +424,8 @@ class MainWindow(QMainWindow):
                 "Save changes to current case files before creating a New Case", "Save Changes")
             if yNC == 1:  # if yes
                 # save the project
-                self.project.add_stl_file()
+                
+                self.current_stl_path = ModService.add_geometry(self.project)
                 ProjectService.write_settings(self.project)
 
                 self.disableButtons()
@@ -475,7 +475,7 @@ class MainWindow(QMainWindow):
             if yNC == 1:  # if yes
                 # save the project
 
-                self.project.add_stl_file()
+                self.current_stl_path =  ModService.add_geometry(self.project)
                 ProjectService.write_settings(self.project)
                 self.disableButtons()
                 self.ren.RemoveAllViewProps()
@@ -506,7 +506,7 @@ class MainWindow(QMainWindow):
         self.enableButtons()
         self.autoDomain()
         self.update_list()
-        stl_file_paths = self.project.list_stl_paths(self.project.project_path)
+        stl_file_paths = self.project.get_stl_paths(self.project.project_path)
         for stl_file in stl_file_paths:
             self.showSTL(stlFile=stl_file)
         self.readyStatusBar()
@@ -521,8 +521,7 @@ class MainWindow(QMainWindow):
     def generateCase(self):
         self.updateStatusBar("Analyzing Case")
         self.updateStatusBar("Creating Project Files")
-        self.project.useFOs = True
-        self.project.set_post_process_settings()
+        self.project.set_post_process_settings(True)
         self.project.summarize_project()
         ProjectService.write_project(self.project)
         self.readyStatusBar()

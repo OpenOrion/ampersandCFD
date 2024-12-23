@@ -17,42 +17,24 @@
  */
 """
 from pathlib import Path
-import shutil
 from typing import Optional, Union, cast
 from src.models.inputs import FluidProperties
-from src.utils.data_input import IOUtils, AmpersandDataInput
-from src.models.settings import SimulationSettings, TriSurfaceMeshGeometry, RefinementAmount, PatchPurpose, Geometry
-from src.utils.stl_analysis import StlAnalysis
+from src.models.settings import SimulationSettings, TriSurfaceMeshGeometry, RefinementAmount
+from src.utils.data_input import IOUtils
 
 
-class AmpersandProject:  # ampersandProject class to handle the project creation and manipulation
-    # this class will contain the methods to handle the logic and program flow
+class AmpersandProject: 
     def __init__(self, project_path: Union[str, Path], settings: Optional[SimulationSettings] = None):
         self.settings = settings or SimulationSettings()
         self.project_path = Path(project_path)
-        self.current_stl_file = None   # current stl file being processed
     
-        self.internalFlow = False  # default is external flow
-        self.on_ground = False  # default is off the ground
-        self.halfModel = False  # default is full model
-        self.settings.control.transient = False  # default is steady state
-        self.ref_amount = 0  # 0: coarse, 1: medium, 2: fine
-        self.useFOs = False  # default is not to use function objects
-        self.current_modification = None  # current modification to the project settings
-        # flag to check if the current working directory is the project directory
-        # self.bbox = BoundingBox(minx=-1e-3, maxx=1e-3, miny=-1e-3, maxy=1e-3, minz=-1e-3, maxz=1e-3)
-        # self.minX, self.maxX, self.minY, self.maxY, self.minZ, self.maxZ = -1e-3, 1e-3, -1e-3, 1e-3, -1e-3, 1e-3
-    # --------------------------------------------------------------------
-    # Methods to handle the project summary and changes
-    # --------------------------------------------------------------------
-
     @property
     def name(self):
         return self.project_path.name
 
     # TODO: fix this later
     def change_boundary_condition(self, bcName: str, newBC: str):
-        if not self.internalFlow:  # if it is external flow
+        if not self.settings.mesh.internalFlow:  # if it is external flow
             bcPatches = self.settings.mesh.patches
             for name, aPatch in self.settings.mesh.patches.items():
                 if bcName == name:
@@ -91,65 +73,19 @@ class AmpersandProject:  # ampersandProject class to handle the project creation
         stl_geoemtry.refineMin = refMin
         stl_geoemtry.refineMax = refMax
         stl_geoemtry.featureLevel = refMax
-
-
-    def list_stl_paths(self, project_path: Union[str, Path]):
-        stl_dir = Path(project_path) / "constant" / "triSurface"
-        if not stl_dir.exists():
-            return []
-        return list(stl_dir.glob("*.stl"))
     
-    def add_stl_file(self, stl_path: Union[str, Path], purpose: PatchPurpose='wall'):
-        # Convert paths to Path objects
-        stl_path = Path(stl_path)
-        stl_name=stl_path.name
-        dest_path = self.project_path / "constant" / "triSurface" / stl_name
-
-        # Validate input file
-        if not stl_path.exists():
-            raise FileNotFoundError(f"STL file {stl_path} does not exist")
-            
-        if dest_path.exists():
-            raise ValueError(f"STL file {stl_name} already exists in project")
-
-
-        # Get purpose and properties
-        property = None if IOUtils.GUIMode else AmpersandDataInput.get_property(purpose)
-
-
-        StlAnalysis.update_settings(self.settings, stl_path, purpose, property)
-
-
-        # Copy STL file to project
-        try:
-            dest_path.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(stl_path, dest_path)
-            IOUtils.print(f"Copied {dest_path.name} to {dest_path}")
-        except OSError as e:
-            raise RuntimeError(f"Failed to copy STL file: {e}")
-
-        # Set solid name in STL file
-        try:
-            StlAnalysis.set_stl_solid_name(dest_path)
-        except Exception as e:
-            raise RuntimeError(f"Failed to set STL solid name: {e}")
-
-        self.current_stl_file = dest_path
-
 
     def set_flow_type(self, is_internal_flow=False):
-        self.internalFlow = is_internal_flow
         self.settings.mesh.internalFlow = is_internal_flow
 
     def set_half_model(self, is_half_model: bool):
-        self.halfModel = is_half_model
         self.settings.mesh.halfModel = is_half_model
 
         if is_half_model:
             self.settings.mesh.patches['back'].type = 'symmetry'
 
     def set_inlet_values(self, U: Optional[tuple[float, float, float]] = None):
-        if (not self.internalFlow):  # external flow
+        if (not self.settings.mesh.internalFlow):  # external flow
             assert U is not None, "Inlet velocity is not set, required for external flow"
             self.settings.inletValues.U = U
             self.settings.boundaryConditions.velocityInlet.u_value = U
@@ -193,21 +129,17 @@ class AmpersandProject:  # ampersandProject class to handle the project creation
             self.settings.numerical.relaxationFactors.p = 0.3
 
     def set_on_ground(self, on_ground: bool):
-        self.on_ground = on_ground
         self.settings.mesh.onGround = on_ground
         # TODO: ground doesn't exist
         # if on_ground:
         #     self.settings.mesh.patches['ground'].type = 'wall'
 
     def set_refinement_amount(self, ref_amount: RefinementAmount):
-        self.ref_amount = ref_amount
         self.settings.mesh.refAmount = ref_amount
 
 
     def set_post_process_settings(self, useFOs: bool):
-        self.useFOs = useFOs
         self.settings.postProcess.FOs = useFOs
-
         meshPoint = list(self.settings.mesh.castellatedMeshControls.locationInMesh)
         self.settings.postProcess.massFlow = True
         self.settings.postProcess.minMax = True
@@ -217,6 +149,17 @@ class AmpersandProject:  # ampersandProject class to handle the project creation
         self.settings.postProcess.probeLocations.append(meshPoint)
 
 
+    def summarize_project(self):
+        IOUtils.show_title("Project Summary")
+
+        IOUtils.print(f"Internal Flow: {self.settings.mesh.internalFlow}")
+        if (self.settings.mesh.internalFlow == False):
+            IOUtils.print(f"On Ground: {self.settings.mesh.onGround}")
+        IOUtils.print(f"Transient: {self.settings.control.transient}")
+        IOUtils.print(self.settings.mesh.domain.__repr__())
+        # TODO: maybe turn this back on later
+        # AmpersandUtils.list_stl_files(self.stl_files)
+        
 
     def summarize_boundary_conditions(self):
         i = 1
@@ -259,38 +202,6 @@ class AmpersandProject:  # ampersandProject class to handle the project creation
         return boundaries  # return the number of boundarys
 
 
-    def summarize_project(self):
-        trueFalse = {True: 'Yes', False: 'No'}
-        IOUtils.show_title("Project Summary")
-
-        IOUtils.print(f"Internal Flow: {trueFalse[self.internalFlow]}")
-        if (self.internalFlow == False):
-            IOUtils.print(f"On Ground: {trueFalse[self.on_ground]}")
-        IOUtils.print(f"Transient: {trueFalse[self.settings.control.transient]}")
-        self.summarize_background_mesh()
-        # TODO: maybe turn this back on later
-        # AmpersandUtils.list_stl_files(self.stl_files)
-        
-
-    # this will show the details of the background mesh
-    def summarize_background_mesh(self):
-        minX = self.settings.mesh.domain.minx
-        maxX = self.settings.mesh.domain.maxx
-        minY = self.settings.mesh.domain.miny
-        maxY = self.settings.mesh.domain.maxy
-        minZ = self.settings.mesh.domain.minz
-        maxZ = self.settings.mesh.domain.maxz
-        nx = self.settings.mesh.domain.nx
-        ny = self.settings.mesh.domain.ny
-        nz = self.settings.mesh.domain.nz
-        IOUtils.print(f"Domain size:{'X':>10}{'Y':>10}{'Z':>10}")
-        IOUtils.print(f"Min         {minX:>10.3f}{minY:>10.3f}{minZ:>10.3f}")
-        IOUtils.print(f"Max         {maxX:>10.3f}{maxY:>10.3f}{maxZ:>10.3f}")
-        IOUtils.print(f"Background mesh size: {nx}x{ny}x{nz} cells")
-        IOUtils.print(f"Background cell size: {self.settings.mesh.maxCellSize} m")
-
-
-
     def list_stl_files(self):
         if IOUtils.GUIMode:
             for i, (geometry_name, geometry) in enumerate(self.settings.mesh.geometry.items()):
@@ -322,3 +233,9 @@ class AmpersandProject:  # ampersandProject class to handle the project creation
                 IOUtils.print(f"{i+1:<5}{geometry_name:<20}{geometry.purpose:<20}({geometry.refineMin} {geometry.refineMax}{')':<11}{stl_property:<15}")
         IOUtils.print_line()
 
+
+    def get_stl_paths(self, project_path: Union[str, Path]):
+        stl_dir = Path(project_path) / "constant" / "triSurface"
+        if not stl_dir.exists():
+            return []
+        return list(stl_dir.glob("*.stl"))

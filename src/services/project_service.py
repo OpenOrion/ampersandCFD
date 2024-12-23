@@ -13,11 +13,13 @@ from src.generators.numericalSettingsDict import create_fvSchemesDict, create_fv
 from src.generators.postProcessDict import PostProcess
 from src.utils.common import crlf_to_LF
 from src.utils.data_input import IOUtils
+from src.models.settings import PatchPurpose, PatchProperty
 from src.project import AmpersandProject
 from src.generators.scriptGenerator import ScriptGenerator
 from src.generators.snappyHexMeshDict import create_snappyHexMeshDict
 from src.generators.surfaceExtractorDict import create_surfaceDict
 from src.generators.transportAndTurbulenceDict import create_transportPropertiesDict, create_turbulencePropertiesDict
+from src.utils.stl_analysis import StlAnalysis
 
 
 class ProjectService:
@@ -83,6 +85,41 @@ class ProjectService:
         Path(project.project_path / "project_settings.yaml").write_text(
             yaml.dump(project.settings.model_dump(), default_flow_style=False, sort_keys=False)
         )
+
+
+    @staticmethod
+    def add_stl_file(project: AmpersandProject, stl_path: Union[str, Path], property: PatchProperty, purpose: PatchPurpose='wall'):
+        # Convert paths to Path objects
+        stl_path = Path(stl_path)
+        stl_name=stl_path.name
+        dest_path = project.project_path / "constant" / "triSurface" / stl_name
+
+        # Validate input file
+        if not stl_path.exists():
+            raise FileNotFoundError(f"STL file {stl_path} does not exist")
+            
+        if dest_path.exists():
+            raise ValueError(f"STL file {stl_name} already exists in project")
+
+        StlAnalysis.update_settings(project.settings, stl_path, purpose, property)
+
+        # Copy STL file to project
+        try:
+            dest_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(stl_path, dest_path)
+            IOUtils.print(f"Copied {dest_path.name} to {dest_path}")
+        except OSError as e:
+            raise RuntimeError(f"Failed to copy STL file: {e}")
+
+        # Set solid name in STL file
+        try:
+            StlAnalysis.set_stl_solid_name(dest_path)
+        except Exception as e:
+            raise RuntimeError(f"Failed to set STL solid name: {e}")
+
+        return dest_path
+
+
     @staticmethod
     def write_openfoam_files(project: AmpersandProject):
         if (not project.project_path.exists()):
@@ -122,7 +159,7 @@ class ProjectService:
         decomposeParDict = createDecomposeParDict(project.settings.parallel)
         Path(f"{project.project_path}/system/decomposeParDict").write_text(decomposeParDict)
         
-        FODict = PostProcess.create_FOs(project.settings.mesh, project.settings.postProcess, useFOs=project.useFOs)
+        FODict = PostProcess.create_FOs(project.settings.mesh, project.settings.postProcess, useFOs=project.settings.postProcess.FOs)
         Path(f"{project.project_path}/system/FOs").write_text(FODict)
 
         # create mesh script

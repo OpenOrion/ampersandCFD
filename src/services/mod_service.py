@@ -18,8 +18,11 @@
 """
 
 
-from typing import Literal
-from src.models.settings import BoundingBox, Domain
+from pathlib import Path
+import shutil
+from typing import Literal, Union
+from src.models.settings import BoundingBox, Domain, PatchPurpose
+from src.services.project_service import ProjectService
 from src.utils.data_input import AmpersandDataInput, IOUtils
 from src.project import AmpersandProject
 from src.utils.stl_analysis import StlAnalysis
@@ -50,8 +53,8 @@ class ModService:
             ModService.change_turbulenc_model(project)
         elif modification_type == "Post Processing Settings":
             ModService.change_post_process_settings(project)
-        
         raise ValueError("Invalid option. Aborting operation")
+
 
 
     @staticmethod
@@ -91,7 +94,7 @@ class ModService:
     # this will allow the user to change the details of the stl file if necessary
     # TODO: fix this
     @staticmethod
-    def change_stl_details(project, stl_file_number=0):
+    def change_stl_details(project: AmpersandProject, stl_file_number=0):
         project.list_stl_files()
         change_purpose = IOUtils.get_input("Change any STL files (y/N)?: ")
         if change_purpose.lower() != 'y':
@@ -139,7 +142,8 @@ class ModService:
     @staticmethod
     def change_background_mesh(project: AmpersandProject):
         IOUtils.print("Current background mesh")
-        project.summarize_background_mesh()
+        IOUtils.print(project.settings.mesh.domain.__repr__())
+
         # ask whether to change domain size
         change_domain_size = IOUtils.get_input_bool(
             "Change domain size (y/N)?: ")
@@ -158,22 +162,30 @@ class ModService:
             ModService.change_mesh_size(project, cellSize)
             IOUtils.print("Cell size changed")
         if change_domain_size or change_mesh_size:
-            project.summarize_background_mesh()
+            IOUtils.print(project.settings.mesh.domain.__repr__())
         else:
             IOUtils.print("No change in background mesh")
 
     # TODO: fix this function
     @staticmethod
     def add_geometry(project: AmpersandProject):
+        current_stl_file = None
         IOUtils.print("Adding geometry")
 
         yN = IOUtils.get_input("Add STL file to the project (y/N)?: ")
         while yN.lower() == 'y':
             stl_path = IOUtils.get_file( [("STL Geometry", "*.stl"), ("OBJ Geometry", "*.obj")])
             purpose = AmpersandDataInput.get_purpose()
-            project.add_stl_file(stl_path, purpose)
+
+
+            # Get purpose and properties
+            property = None if IOUtils.GUIMode else AmpersandDataInput.get_property(purpose)
+
+
+            current_stl_file = ProjectService.add_stl_file(project, stl_path, property, purpose)
             yN = IOUtils.get_input("Add another STL file to the project (y/N)?: ")
         AmpersandUtils.list_stl_files(project.stl_files)
+        return current_stl_file
 
     # TODO: fix this function
     @staticmethod
@@ -197,8 +209,7 @@ class ModService:
     def change_mesh_point(project: AmpersandProject):
         IOUtils.print("Changing mesh points")
         currentMeshPoint = project.settings.mesh.castellatedMeshControls.locationInMesh
-        IOUtils.print(
-            f"Current mesh points: ({currentMeshPoint[0]},{currentMeshPoint[1]},{currentMeshPoint[2]})")
+        IOUtils.print(f"Current mesh points: ({currentMeshPoint[0]},{currentMeshPoint[1]},{currentMeshPoint[2]})")
 
         x, y, z = IOUtils.get_input_vector("Enter new mesh points: ")
         project.settings.mesh.castellatedMeshControls.locationInMesh = (x, y, z)
