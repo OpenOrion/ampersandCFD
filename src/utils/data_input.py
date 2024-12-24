@@ -17,12 +17,12 @@
  */
 """
 
-from typing import Any
+from typing import Any, cast
 import sys
 from tkinter import filedialog, Tk
 
 from src.models.inputs import FLUID_PYSICAL_PROPERTIES, FluidProperties
-from src.models.settings import BoundingBox, RefinementAmount
+from src.models.settings import BoundingBox, RefinementAmount, PatchProperty, PatchPurpose
 
 
 try:
@@ -245,21 +245,6 @@ class AmpersandDataInput:
 
 
     @staticmethod
-    def get_purpose():
-        purposes = ['wall', 'inlet', 'outlet', 'refinementRegion', 'refinementSurface',
-                    'cellZone', 'baffles', 'symmetry', 'cyclic', 'empty',]
-        IOUtils.print(f"Enter purpose for this STL geometry")
-        IOUtils.print_numbered_list(purposes)
-        purpose_no = IOUtils.get_input_int("Enter purpose number: ")-1
-        if (purpose_no < 0 or purpose_no > len(purposes)-1):
-            IOUtils.print(
-                "Invalid purpose number. Setting purpose to wall")
-            purpose = 'wall'
-        else:
-            purpose = purposes[purpose_no]
-        return purpose
-
-    @staticmethod
     def get_boundary_type():
         bcTypes = ["inlet", "outlet", "wall",
                    "symmetry", "cyclic", "empty", "movingWall",]
@@ -321,14 +306,29 @@ class AmpersandDataInput:
         if ref_amount_index not in [0, 1, 2]:
             IOUtils.print("Invalid mesh refinement level. Defaulting to medium.")
             ref_amount_index = 1
-        return ref_amounts[ref_amount_index]
+        return cast(RefinementAmount, ref_amounts[ref_amount_index])
 
 
     @staticmethod
-    def get_property(purpose='wall'):
+    def get_purpose() -> PatchPurpose:
+        purposes = ['wall', 'inlet', 'outlet', 'refinementRegion', 'refinementSurface',
+                    'cellZone', 'baffles', 'symmetry', 'cyclic', 'empty',]
+        IOUtils.print(f"Enter purpose for this STL geometry")
+        IOUtils.print_numbered_list(purposes)
+        purpose_no = IOUtils.get_input_int("Enter purpose number: ")-1
+        if (purpose_no < 0 or purpose_no > len(purposes)-1):
+            IOUtils.print(
+                "Invalid purpose number. Setting purpose to wall")
+            purpose = 'wall'
+        else:
+            purpose = purposes[purpose_no]
+        return cast(PatchPurpose, purpose)
+
+    @staticmethod
+    def get_property(purpose='wall') -> PatchProperty:
         if purpose == 'inlet':
             U = AmpersandDataInput.get_inlet_values()
-            return tuple(U)
+            return cast(PatchProperty, tuple(U))
         elif purpose == 'refinementRegion':
             refLevel = IOUtils.get_input_int("Enter refinement level: ")
             return refLevel

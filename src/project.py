@@ -63,16 +63,7 @@ class AmpersandProject:
                 return 0
         return -1
 
-    def change_stl_refinement_level(self, stl_name: str):
-        IOUtils.print("Changing refinement level")
-        refMin = IOUtils.get_input_int("Enter new refMin: ")
-        refMax = IOUtils.get_input_int("Enter new refMax: ")
-        
-        stl_geoemtry = self.settings.mesh.geometry[stl_name]
-        assert isinstance(stl_geoemtry, TriSurfaceMeshGeometry), "Geometry is not a TriSurfaceMeshGeometry"
-        stl_geoemtry.refineMin = refMin
-        stl_geoemtry.refineMax = refMax
-        stl_geoemtry.featureLevel = refMax
+
     
 
     def set_flow_type(self, is_internal_flow=False):
@@ -162,52 +153,34 @@ class AmpersandProject:
         
 
     def summarize_boundary_conditions(self):
-        i = 1
         boundaries = []
         IOUtils.show_title("Boundary Conditions")
-        IOUtils.print(f"{'No.':<5}{'Name':<20}{
-                                 'Purpose':<20}{'Value':<15}")
-        # for external flows, show the boundary conditions for domain first
-        if self.settings.mesh.internalFlow == False:
-            for patch_name in self.settings.mesh.patches.keys():
-                patch = self.settings.mesh.patches[patch_name]
-                if patch.property == None:
-                    property = "None"
-                elif isinstance(patch.property, list):
-                    property = f"[{patch.property[0]} {
-                        patch.property[1]} {patch.property[2]}]"
-                elif isinstance(patch.property, tuple):
-                    property = f"[{patch.property[0]} {
-                        patch.property[1]} {patch.property[2]}]"
-                else:
-                    property = patch.property
-                IOUtils.print(f"{i:<5}{patch_name:<20}{patch.purpose:<20}{property:<15}")
-                i += 1
-                boundaries.append(patch_name)
-        for patch_name, patch in self.settings.mesh.geometry.items():
-            if patch.purpose != 'refinementRegion' and patch.purpose != 'refinementSurface':
-                if patch.property == None:
-                    property = "None"
-                elif isinstance(patch.property, list):
-                    property = f"[{patch.property[0]} {
-                        patch.property[1]} {patch.property[2]}]"
-                elif isinstance(patch.property, tuple):
-                    property = f"[{patch.property[0]} {
-                        patch.property[1]} {patch.property[2]}]"
-                else:
-                    property = "None"
-                IOUtils.print(f"{i:<5}{patch_name:<20}{patch.purpose:<20}{property:<15}")
-                i += 1
-                boundaries.append(patch_name)
-        return boundaries  # return the number of boundarys
+        IOUtils.print(f"{'No.':<5}{'Name':<20}{'Purpose':<20}{'Value':<15}")
 
+        # Handle external flow boundary conditions first
+        if not self.settings.mesh.internalFlow:
+            for i, (patch_name, patch) in enumerate(self.settings.mesh.patches.items(), 1):
+                IOUtils.print(f"{i:<5}{patch_name:<20}{patch.purpose:<20}{str(patch.property):<15}")
+                boundaries.append(patch_name)
 
-    def list_stl_files(self):
+        # Handle geometry boundary conditions 
+        start_i = len(boundaries) + 1
+        for i, (patch_name, patch) in enumerate(self.settings.mesh.geometry.items(), start_i):
+            if patch.purpose not in ['refinementRegion', 'refinementSurface']:
+                IOUtils.print(f"{i:<5}{patch_name:<20}{patch.purpose:<20}{str(patch.property):<15}")
+                boundaries.append(patch_name)
+
+        return boundaries
+
+    def summarize_stl_files(self):
+        stl_files: list[str] = []
         if IOUtils.GUIMode:
             for i, (geometry_name, geometry) in enumerate(self.settings.mesh.geometry.items()):
                 if isinstance(geometry, TriSurfaceMeshGeometry):
                     IOUtils.print(f"{i+1}. {geometry_name}")
-            return
+                    stl_files.append(geometry_name)
+            return stl_files
+            
         IOUtils.show_title("STL Files")
 
         IOUtils.print(f"{'No.':<5}{'Name':<20}{'Purpose':<20}{'RefineMent':<15}{'Property':<15}")
@@ -231,7 +204,9 @@ class AmpersandProject:
                 else:
                     stl_property = geometry.property
                 IOUtils.print(f"{i+1:<5}{geometry_name:<20}{geometry.purpose:<20}({geometry.refineMin} {geometry.refineMax}{')':<11}{stl_property:<15}")
+                stl_files.append(geometry_name)
         IOUtils.print_line()
+        return stl_files
 
 
     def get_stl_paths(self, project_path: Union[str, Path]):

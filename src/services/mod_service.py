@@ -18,10 +18,8 @@
 """
 
 
-from pathlib import Path
-import shutil
-from typing import Literal, Union
-from src.models.settings import BoundingBox, Domain, PatchPurpose
+from typing import Literal, cast
+from src.models.settings import BoundingBox, Domain, TriSurfaceMeshGeometry, PatchProperty
 from src.services.project_service import ProjectService
 from src.utils.data_input import AmpersandDataInput, IOUtils
 from src.project import AmpersandProject
@@ -45,28 +43,20 @@ class ModService:
             ModService.change_boundary_conditions(project)
         elif modification_type == "Fluid Properties":
             ModService.change_fluid_properties(project)
-        elif modification_type == "Numerical Settings":
-            ModService.change_numerical_settings(project)
-        elif modification_type == "Simulation Control Settings":
-            ModService.change_simulation_settings(project)
-        elif modification_type == "Turbulence Model":
-            ModService.change_turbulenc_model(project)
-        elif modification_type == "Post Processing Settings":
-            ModService.change_post_process_settings(project)
         raise ValueError("Invalid option. Aborting operation")
-
 
 
     @staticmethod
     # this is to change the global refinement level of the mesh
     def change_macro_refinement_level(project: AmpersandProject):
-        ref_amounts = ["coarse", "medium", "fine"]
-        IOUtils.print(f"Current refinement level: {ref_amounts[project.settings.mesh.refAmount]}")
+        IOUtils.print(f"Current refinement level: {project.settings.mesh.refAmount}")
         ref_amount_index = IOUtils.get_input_int("Enter new refinement level (0:coarse, 1:medium, 2:fine): ")
         if (ref_amount_index < 0 or ref_amount_index > 2):
             IOUtils.print("Invalid refinement level, please enter the value again")
             ModService.change_refinement_levels(project)
-        project.settings.mesh.refAmount = ref_amounts[ref_amount_index]
+
+        ref_amounts = ["coarse", "medium", "fine"]
+        project.settings.mesh.refAmount = ref_amounts[ref_amount_index] # type: ignore
 
     @staticmethod
     def change_domain_size(project: AmpersandProject, bounds: BoundingBox):
@@ -78,63 +68,22 @@ class ModService:
         nx, ny, nz = StlAnalysis.calc_nx_ny_nz(project.settings.mesh.domain, cellSize)
         if (nx > 500 or ny > 500 or nz > 500):
             IOUtils.print("Warning: Mesh is too fine. Consider increasing the cell size")
-        project.settings.mesh.domain.nx = nx
-        project.settings.mesh.domain.ny = ny
-        project.settings.mesh.domain.nz = nz
+        project.settings.mesh.domain = Domain.update(project.settings.mesh.domain, nx=nx, ny=ny, nz=nz)
 
 
-    @staticmethod
-    def change_stl_purpose(geometry, meshSettings):
-        stlFile = geometry.file
-        IOUtils.print(f"Current STL file purpose: {geometry.purpose}")
-        purpose = IOUtils.get_input("Enter new STL file purpose: ")
-        geometry.purpose = purpose
-        return geometry
-
-    # this will allow the user to change the details of the stl file if necessary
-    # TODO: fix this
-    @staticmethod
-    def change_stl_details(project: AmpersandProject, stl_file_number=0):
-        project.list_stl_files()
-        change_purpose = IOUtils.get_input("Change any STL files (y/N)?: ")
-        if change_purpose.lower() != 'y':
-            IOUtils.print("No change in STL files properties")
-            return 0
-        stl_file_number = IOUtils.get_input(
-            "Enter the number of the file to change purpose: ")
-        try:
-            stl_file_number = int(stl_file_number)
-        except ValueError:
-            IOUtils.print("Invalid input. Please try again.")
-            ModService.change_stl_details()
-            # return -1
-        if stl_file_number < 0 or stl_file_number > len(project.stl_files):
-            IOUtils.print("Invalid input. Please try again.")
-            ModService.change_stl_details()
-
-        stl_file = project.stl_files[stl_file_number]
-        stl_name = stl_file.name
-        purpose = AmpersandDataInput.get_purpose()
-        # self.add_purpose_(stl_name,purpose)
-        return 0
-
-    # add purpose to the stl file. currently not used
-    @staticmethod
-    def add_purpose_(stl_files, stl_name, purpose='wall'):
-        IOUtils.print(f"Setting purpose of {stl_name} to")
-        for stl in stl_files:
-            if stl.name == stl_name:
-                IOUtils.print(
-                    f"Setting purpose of {stl_name} to {purpose}")
-                stl.purpose = purpose
-                return stl_files
-        IOUtils.print(
-            f"STL file {stl_name} not found in the project")
-        return -1
-
+    # this will allow the user to change the refinement level of the stl file
     @staticmethod
     def change_stl_refinement_level(project: AmpersandProject, stl_name: str):
-        project.change_stl_refinement_level(stl_name)
+        IOUtils.print("Changing refinement level")
+        refMin = IOUtils.get_input_int("Enter new refMin: ")
+        refMax = IOUtils.get_input_int("Enter new refMax: ")
+        
+        stl_geoemtry = project.settings.mesh.geometry[stl_name]
+        assert isinstance(stl_geoemtry, TriSurfaceMeshGeometry), "Geometry is not a TriSurfaceMeshGeometry"
+        stl_geoemtry.refineMin = refMin
+        stl_geoemtry.refineMax = refMax
+        stl_geoemtry.featureLevel = refMax
+
 
     # ---------------------------------------------------------------------#
     # The functions called when modifications are to be made project #
@@ -145,28 +94,25 @@ class ModService:
         IOUtils.print(project.settings.mesh.domain.__repr__())
 
         # ask whether to change domain size
-        change_domain_size = IOUtils.get_input_bool(
-            "Change domain size (y/N)?: ")
+        change_domain_size = IOUtils.get_input_bool("Change domain size (y/N)?: ")
         # ask new domain size
         if change_domain_size:
             bounds = AmpersandDataInput.get_domain_size()
             ModService.change_domain_size(project, bounds)
             IOUtils.print("Domain size changed")
         # ask new cell size
-        change_mesh_size = IOUtils.get_input_bool(
-            "Change cell size (y/N)?: ")
+        change_mesh_size = IOUtils.get_input_bool("Change cell size (y/N)?: ")
         if change_mesh_size:
-            cellSize = AmpersandDataInput.get_cell_size()
-            project.settings.mesh.maxCellSize = cellSize
+            cell_size = AmpersandDataInput.get_cell_size()
+            project.settings.mesh.maxCellSize = cell_size
             # calculate new mesh size
-            ModService.change_mesh_size(project, cellSize)
+            ModService.change_mesh_size(project, cell_size)
             IOUtils.print("Cell size changed")
         if change_domain_size or change_mesh_size:
             IOUtils.print(project.settings.mesh.domain.__repr__())
         else:
             IOUtils.print("No change in background mesh")
 
-    # TODO: fix this function
     @staticmethod
     def add_geometry(project: AmpersandProject):
         current_stl_file = None
@@ -175,35 +121,42 @@ class ModService:
         yN = IOUtils.get_input("Add STL file to the project (y/N)?: ")
         while yN.lower() == 'y':
             stl_path = IOUtils.get_file( [("STL Geometry", "*.stl"), ("OBJ Geometry", "*.obj")])
-            purpose = AmpersandDataInput.get_purpose()
-
+            assert stl_path is not None, "No STL file selected"
 
             # Get purpose and properties
+            purpose = AmpersandDataInput.get_purpose()
             property = None if IOUtils.GUIMode else AmpersandDataInput.get_property(purpose)
-
 
             current_stl_file = ProjectService.add_stl_file(project, stl_path, property, purpose)
             yN = IOUtils.get_input("Add another STL file to the project (y/N)?: ")
-        AmpersandUtils.list_stl_files(project.stl_files)
+        project.summarize_stl_files()
+        
         return current_stl_file
 
-    # TODO: fix this function
     @staticmethod
     def change_refinement_levels(project: AmpersandProject):
         IOUtils.print("Changing refinement levels")
-        # TODO: Implement this function
-        AmpersandUtils.list_stl_files(project.stl_files)
+        stl_file_name = ModService.choose_stl_file(project)
+        ModService.change_stl_refinement_level(project, stl_file_name)
 
+
+    @staticmethod
+    def choose_stl_file(project: AmpersandProject) -> str:
+        IOUtils.print("Changing refinement levels")
+        stl_file_names = project.summarize_stl_files()
         stl_file_number = IOUtils.get_input("Enter the number of the file to change refinement level: ")
         try:
             stl_file_number = int(stl_file_number)
+            if stl_file_number <= 0 or stl_file_number > len(stl_file_names):
+                raise ValueError("Invalid input. Please try again.")
+
+            project.summarize_stl_files()
+            return stl_file_names[stl_file_number-1]
+
         except ValueError:
             IOUtils.print("Invalid input. Please try again.")
-        if stl_file_number <= 0 or stl_file_number > len(project.stl_files):
-            IOUtils.print("Invalid input. Please try again.")
-        else:
-            ModService.change_stl_refinement_level(project, stl_file_number-1)
-        AmpersandUtils.list_stl_files(project.stl_files)
+            return ModService.choose_stl_file(project)
+
 
     @staticmethod
     def change_mesh_point(project: AmpersandProject):
@@ -216,47 +169,24 @@ class ModService:
         IOUtils.print(
             f"New mesh points: ({currentMeshPoint[0]},{currentMeshPoint[1]},{currentMeshPoint[2]})")
 
-    # TODO: fix this function
     @staticmethod
     def change_boundary_conditions(project: AmpersandProject):
         IOUtils.print("Changing boundary conditions")
-        # TODO: Implement this function
-        bcs = project.summarize_boundary_conditions()
-        # ampersandIO.printMessage("Current boundary conditions")
-        # ampersandIO.printMessage(bcs)
+        boundary_conditions = project.summarize_boundary_conditions()
 
         bc_number = IOUtils.get_input( "Enter the number of the boundary to change: ")
         try:
             bc_number = int(bc_number)
+            if bc_number <= 0 or bc_number > len(boundary_conditions):
+                IOUtils.print("Invalid input. Please try again.")
+            else:
+                bc = boundary_conditions[bc_number-1]
+                IOUtils.print(f"Changing boundary condition for patch: {bc}")
+                newBcType = AmpersandDataInput.get_boundary_type()
+                project.change_boundary_condition(bc, newBcType)
         except ValueError:
             IOUtils.print("Invalid input. Please try again.")
-        if bc_number <= 0 or bc_number > len(bcs):
-            IOUtils.print("Invalid input. Please try again.")
-        else:
-            bc = bcs[bc_number-1]
-            IOUtils.print(f"Changing boundary condition for patch: {bc}")
-            newBcType = AmpersandDataInput.get_boundary_type()
-            project.change_boundary_condition(bc, newBcType)
-
-    @staticmethod
-    def change_numerical_settings(project: AmpersandProject):
-        IOUtils.print("Changing numerical settings")
-        # TODO: Implement this function
-
-    @staticmethod
-    def change_simulation_settings(project: AmpersandProject):
-        IOUtils.print("Changing simulation settings")
-        # TODO: Implement this function
-
-    @staticmethod
-    def change_turbulenc_model(project: AmpersandProject):
-        IOUtils.print("Changing turbulence model")
-        # TODO: Implement this function
-
-    @staticmethod
-    def change_post_process_settings(project: AmpersandProject):
-        IOUtils.print("Changing post process settings")
-        # TODO: Implement this function
+            ModService.change_boundary_conditions(project)
 
     @staticmethod
     def change_fluid_properties(project: AmpersandProject):

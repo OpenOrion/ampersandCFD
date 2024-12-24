@@ -381,8 +381,8 @@ class MainWindow(QMainWindow):
         # self.updateStatusBar("Opening STL")
         # self.openSTL()
         # self.readyStatusBar()
-        ModService.add_geometry(self.project)
-        self.showSTL(stlFile=self.project.current_stl_file)
+        current_stl_file = ModService.add_geometry(self.project)
+        self.showSTL(stlFile=current_stl_file)
         self.update_list()
         # self.project.list_stl_files()
 

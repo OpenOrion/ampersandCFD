@@ -158,10 +158,12 @@ class Domain(BoundingBox):
 
 
     @staticmethod
-    def update(current: "Domain", domain_size: "BoundingBox", nx: Optional[int] = None, ny: Optional[int] = None, nz: Optional[int] = None):
+    def update(current: "Domain", domain_size: Optional["BoundingBox"] = None, nx: Optional[int] = None, ny: Optional[int] = None, nz: Optional[int] = None):
         """
         Update the bounding box coordinates with the given domain size.
         """
+        if domain_size is None:
+            domain_size = current
 
         return Domain(
             minx=min(domain_size.minx, current.minx),
