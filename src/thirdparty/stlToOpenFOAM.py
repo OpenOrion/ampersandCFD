@@ -65,6 +65,8 @@ import json
 import os
 import argparse
 
+from src.utils.data_input import IOUtils
+
 def read_stl_file(filename):
     """
     Reads an STL file and returns the mesh data.
@@ -342,7 +344,7 @@ def find_outside_point(mesh, center_of_mass, min_bounds, max_bounds, initial_dis
         outside_point[i] = np.clip(outside_point[i], lower_bound, upper_bound)
 
     # Debug information
-    print(f"Outside point distance: {distance}, max_distance: {max_distance}, outside_point: {outside_point}")
+    IOUtils.print(f"Outside point distance: {distance}, max_distance: {max_distance}, outside_point: {outside_point}")
 
     return outside_point.tolist()
 
@@ -598,12 +600,12 @@ def main():
     
     # Write JSON report
     write_json_report(args.filename, volume, surface_area, center_of_mass, min_bounds, max_bounds, curvature_values, surface_normals, min_area, max_area, min_edge_length, max_edge_length, min_aspect_ratio, max_aspect_ratio, inside_point, outside_point)
-    print(f"JSON report written based on {args.filename}")
+    IOUtils.print(f"JSON report written based on {args.filename}")
 
     # Generate blockMeshDict if requested
     if args.generate_blockMeshDict and min_bounds and max_bounds:
         generate_blockMeshDict(min_bounds, max_bounds, buffer=args.buffer)
-        print("blockMeshDict generated successfully.")
+        IOUtils.print("blockMeshDict generated successfully.")
 
 if __name__ == "__main__":
     main()

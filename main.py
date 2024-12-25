@@ -23,6 +23,7 @@ from src.cli.create_project import create_project
 from src.cli.open_project import open_project
 from src.utils.watch_sim import watch_sim
 from src.utils.generation import AMPERSAND_HEADER
+from src.utils.logger import logger
 import argparse
 
 
@@ -46,8 +47,7 @@ def main():
         try:
             create_project()
         except KeyboardInterrupt:
-            IOUtils.print(
-                "\nKeyboardInterrupt detected! Aborting project creation")
+            IOUtils.print("\nKeyboardInterrupt detected! Aborting project creation")
             exit()
         except Exception as error:
             IOUtils.error(error)
@@ -55,8 +55,7 @@ def main():
         try:
             open_project()
         except KeyboardInterrupt:
-            IOUtils.print(
-                "\nKeyboardInterrupt detected! Aborting project creation")
+            IOUtils.print("\nKeyboardInterrupt detected! Aborting project creation")
             exit()
         except Exception as error:
             IOUtils.error(error)
@@ -64,12 +63,10 @@ def main():
         try:
             watch_sim()
         except KeyboardInterrupt:
-            IOUtils.print(
-                "\nKeyboardInterrupt detected! Aborting project creation")
+            IOUtils.print("\nKeyboardInterrupt detected! Aborting project creation")
             exit()
         except Exception as error:
             IOUtils.error(error)
     else:
-        IOUtils.print(
-            "Please specify an action to perform. Use --help for more information.")
+        IOUtils.print("Please specify an action to perform. Use --help for more information.")
         parser.print_help()

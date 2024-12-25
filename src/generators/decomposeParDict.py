@@ -17,13 +17,20 @@
  */
 """
 
+from pathlib import Path
+from typing import Union
 from src.models.settings import ParallelSettings
 from src.utils.generation import GenerationUtils
 
-
-def createDecomposeParDict(parallelSettings: ParallelSettings):
-    decomposeParDict = f"""{GenerationUtils.createFoamHeader('dictionary', 'decomposeParDict')}
-numberOfSubdomains {parallelSettings.numberOfSubdomains};
-method {parallelSettings.method};
+class DecomposeParDictGenerator:
+    @staticmethod
+    def generate(parallel_settings: ParallelSettings) -> str:
+        decomposeParDict = f"""{GenerationUtils.createFoamHeader('dictionary', 'decomposeParDict')}
+numberOfSubdomains {parallel_settings.numberOfSubdomains};
+method {parallel_settings.method};
 """
-    return decomposeParDict
+        return decomposeParDict
+
+    @staticmethod
+    def write(parallel_settings: ParallelSettings, project_path: Union[str, Path]):
+        Path(f"{project_path}/system/decomposeParDict").write_text(DecomposeParDictGenerator.generate(parallel_settings))

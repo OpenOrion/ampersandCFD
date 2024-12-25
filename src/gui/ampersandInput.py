@@ -9,6 +9,8 @@ import vtk
 import sys
 from time import sleep
 
+from src.utils.data_input import IOUtils
+
 loader = QUiLoader()
 
 # This function reads STL file and extracts the surface patch names.
@@ -21,10 +23,10 @@ def readSTL(stlFileName="cylinder.stl"):
             items = x.split(" ")
             if(items[0]=='solid'):
                 surfaces.append(items[1][:-1])
-                #print(items[1][:-1])
+                #IOUtils.print(items[1][:-1])
         f.close()
     except:
-        print("Error while opening file: ",stlFileName)
+        IOUtils.print("Error while opening file: ",stlFileName)
     return surfaces
 
 
@@ -54,7 +56,7 @@ class mainWindow(QMainWindow):
         if(fname==""):
             return -1 # CAD file not loaded
         else:
-            print("Current CAD File: ",fname)
+            IOUtils.print("Current CAD File: ",fname)
             return fname
         
     def openSTLDialog(self):
@@ -63,7 +65,7 @@ class mainWindow(QMainWindow):
         if(fname==""):
             return -1 # STL file not loaded
         else:
-            #print("Current STL File: ",fname)
+            #IOUtils.print("Current STL File: ",fname)
             return fname
 
     def openSTL(self):
@@ -71,7 +73,7 @@ class mainWindow(QMainWindow):
         if(stlFileName==-1):
             pass
         else:
-            #print("Copying stl file")
+            #IOUtils.print("Copying stl file")
             stl = stlFileName #self.copySTL(stlFileName=stlFileName)
             if(stl!=-1):
                 self.showSTL(stlFile=stl)
@@ -99,7 +101,7 @@ class mainWindow(QMainWindow):
             self.reader.SetFileName(stlFile)
             self.render3D()
         except:
-            print("Reading STL not successful. Try again")
+            IOUtils.print("Reading STL not successful. Try again")
 
     def render3D(self):  # self.ren and self.iren must be used. other variables are local variables
         # Create a mapper
@@ -130,7 +132,7 @@ class mainWindow(QMainWindow):
         self.updateStatusBar("Loading STL file")
         #stlFile = r"C:\Users\mrtha\Desktop\GitHub\foamAutoGUI\src\pipe.stl"
         surfaces = readSTL(stlFileName=stlFile)
-        print(surfaces)
+        IOUtils.print(surfaces)
         for (i,aSurface) in enumerate(surfaces):
             self.listWidgetObjList.insertItem(i,aSurface)
         message = "Loaded STL file: "+stlFile
@@ -154,16 +156,16 @@ class mainWindow(QMainWindow):
 
 #----------------- Event Handlers -----------------#
     def importSTL(self):
-        print("Open STL")
+        IOUtils.print("Open STL")
         self.updateStatusBar("Opening STL")
         self.openSTL()
     
     def createSphere(self):
-        print("Create Sphere")
+        IOUtils.print("Create Sphere")
         self.updateStatusBar("Creating Sphere")
     
     def chooseInternalFlow(self):
-        print("Choose Internal Flow")
+        IOUtils.print("Choose Internal Flow")
         self.updateStatusBar("Choosing Internal Flow")
 #-------------- End of Event Handlers -------------#
 

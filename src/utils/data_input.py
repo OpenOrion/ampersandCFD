@@ -22,8 +22,8 @@ import sys
 from tkinter import filedialog, Tk
 
 from src.models.inputs import FLUID_PYSICAL_PROPERTIES, FluidProperties
-from src.models.settings import BoundingBox, RefinementAmount, PatchProperty, PatchPurpose
-
+from src.models.settings import BoundingBox, RefinementAmount, PatchProperty, PatchType
+from src.utils.logger import logger
 
 try:
     from PySide6.QtWidgets import QMessageBox
@@ -34,38 +34,37 @@ except:
 class IOUtils:
     GUIMode: bool = False
     window: Any = None
+    verbose: bool = False
     @staticmethod
     def print(*args):
         if IOUtils.GUIMode and IOUtils.window != None:
             IOUtils.window.updateTerminal(*args)
-        else:
-            print(*args)
+        elif IOUtils.verbose:
+            logger.info(' '.join(map(str, args)))
 
     @staticmethod
     def warn(*args):
         if IOUtils.GUIMode:
-            # ampersandIO.printMessage(*args)
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Warning)
             msg.setText("Warning")
             msg.setInformativeText(*args)
             msg.setWindowTitle("Warning")
             msg.exec_()
-        else:
-            print(*args)
+        elif IOUtils.verbose:
+            logger.warning(' '.join(map(str, args)))
 
     @staticmethod
     def error(*args):
         if IOUtils.GUIMode:
-            # ampersandIO.printMessage(*args)
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Critical)
             msg.setText("Error")
             msg.setInformativeText(*args)
             msg.setWindowTitle("Error")
             msg.exec_()
-        else:
-            print(*args, file=sys.stderr)
+        elif IOUtils.verbose:
+            logger.error(' '.join(map(str, args)))
 
     @staticmethod
     def get_input(prompt):
@@ -112,10 +111,8 @@ class IOUtils:
             return vectorInputDialogDriver(prompt)
         else:
             inp = input(prompt).split()
-            # output = [0.,0.,0.]
-            # Check if the input is a list of floats
             try:
-                vec = list(map(float, inp))
+                vec = tuple(map(float, inp))
                 if len(vec) != 3:
                     IOUtils.error("Invalid input. Please enter 3 numbers.")
                     # Recursively call the function until a valid input is given
@@ -125,7 +122,6 @@ class IOUtils:
                 IOUtils.error("Invalid input. Please enter a list of numbers.")
                 # Recursively call the function until a valid input is given
                 return IOUtils.get_input_vector(prompt)
-        # return list(map(float, input(prompt).split()))
 
     @staticmethod
     def get_input_bool(prompt):
@@ -243,20 +239,6 @@ class AmpersandDataInput:
         return cellSize
 
 
-
-    @staticmethod
-    def get_boundary_type():
-        bcTypes = ["inlet", "outlet", "wall",
-                   "symmetry", "cyclic", "empty", "movingWall",]
-        IOUtils.print("List of boundary types")
-        IOUtils.print_numbered_list(bcTypes)
-        bcType = IOUtils.get_input_int(
-            "Enter the number of the boundary type: ")
-        if bcType <= 0 or bcType > len(bcTypes):
-            IOUtils.print("Invalid boundary type. Setting to wall")
-            return "wall"
-        return bcTypes[bcType-1]
-
     @staticmethod
     def get_fluid_properties():
         rho = IOUtils.get_input_float(
@@ -310,7 +292,7 @@ class AmpersandDataInput:
 
 
     @staticmethod
-    def get_purpose() -> PatchPurpose:
+    def get_patch_type() -> PatchType:
         purposes = ['wall', 'inlet', 'outlet', 'refinementRegion', 'refinementSurface',
                     'cellZone', 'baffles', 'symmetry', 'cyclic', 'empty',]
         IOUtils.print(f"Enter purpose for this STL geometry")
@@ -322,10 +304,10 @@ class AmpersandDataInput:
             purpose = 'wall'
         else:
             purpose = purposes[purpose_no]
-        return cast(PatchPurpose, purpose)
+        return cast(PatchType, purpose)
 
     @staticmethod
-    def get_property(purpose='wall') -> PatchProperty:
+    def get_patch_property(purpose: PatchType='wall') -> PatchProperty:
         if purpose == 'inlet':
             U = AmpersandDataInput.get_inlet_values()
             return cast(PatchProperty, tuple(U))

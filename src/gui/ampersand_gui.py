@@ -37,10 +37,10 @@ def readSTL(stlFileName="cylinder.stl"):
             items = x.split(" ")
             if (items[0] == 'solid'):
                 surfaces.append(items[1][:-1])
-                # print(items[1][:-1])
+                # IOUtils.print(items[1][:-1])
         f.close()
     except:
-        print("Error while opening file: ", stlFileName)
+        IOUtils.print("Error while opening file: ", stlFileName)
     return surfaces
 
 
@@ -148,7 +148,7 @@ class MainWindow(QMainWindow):
         if (fname == ""):
             return -1  # CAD file not loaded
         else:
-            print("Current CAD File: ", fname)
+            IOUtils.print("Current CAD File: ", fname)
             return fname
 
     def openSTLDialog(self):
@@ -157,7 +157,7 @@ class MainWindow(QMainWindow):
         if (fname == ""):
             return -1  # STL file not loaded
         else:
-            # print("Current STL File: ",fname)
+            # IOUtils.print("Current STL File: ",fname)
             return fname
 
     def openSTL(self):
@@ -165,7 +165,7 @@ class MainWindow(QMainWindow):
         if (stlFileName == -1):
             pass
         else:
-            # print("Copying stl file")
+            # IOUtils.print("Copying stl file")
             stl = stlFileName  # self.copySTL(stlFileName=stlFileName)
             if (stl != -1):
                 self.showSTL(stlFile=stl)
@@ -206,7 +206,7 @@ class MainWindow(QMainWindow):
             self.reader.SetFileName(str(stlFile))
             self.render3D()
         except:
-            print("Reading STL not successful. Try again")
+            IOUtils.print("Reading STL not successful. Try again")
 
     def initializeVTK(self):
         # Create a mapper
@@ -320,13 +320,13 @@ class MainWindow(QMainWindow):
         self.iren.Start()
 
     def loadSTL(self, stlFile=r"C:\Users\mrtha\Desktop\GitHub\foamAutoGUI\src\pipe.stl"):
-        IOUtils.print("Loading STL file")
+        IOUtils.IOUtils.print("Loading STL file")
         stl_name = stlFile.split("/")[-1]
         if (stl_name in self.surfaces):
             self.updateStatusBar("STL file already loaded")
             return
         self.surfaces.append(stl_name)
-        print(self.surfaces)
+        IOUtils.print(self.surfaces)
         idx = len(self.surfaces)
         self.window.listWidgetObjList.insertItem(idx, stl_name)
         message = "Loaded STL file: "+stlFile
@@ -341,7 +341,7 @@ class MainWindow(QMainWindow):
     def updatePropertyBox(self):
         # find the selected item in the list
         item = self.window.listWidgetObjList.currentItem()
-        print("Selected Item: ", item.text())
+        IOUtils.print("Selected Item: ", item.text())
 
     def updateStatusBar(self, message="Go!"):
         self.window.statusbar.showMessage(message)
@@ -387,20 +387,20 @@ class MainWindow(QMainWindow):
         # self.project.list_stl_files()
 
     def createSphere(self):
-        # print("Create Sphere")
-        IOUtils.print("Creating Sphere")
+        # IOUtils.print("Create Sphere")
+        IOUtils.IOUtils.print("Creating Sphere")
         # create a sphere dialog
         sphereData = sphereDialogDriver()
         if sphereData == None:
             IOUtils.error("Sphere Dialog Box Closed")
         else:
             x, y, z, r = sphereData
-            print("Center: ", x, y, z)
-            print("Radius: ", r)
+            IOUtils.print("Center: ", x, y, z)
+            IOUtils.print("Radius: ", r)
         self.readyStatusBar()
 
     def chooseInternalFlow(self):
-        # print("Choose Internal Flow")
+        # IOUtils.print("Choose Internal Flow")
         self.project.settings.mesh.internalFlow = True
         self.window.checkBoxOnGround.setEnabled(False)
         self.updateStatusBar("Choosing Internal Flow")
@@ -460,7 +460,7 @@ class MainWindow(QMainWindow):
         self.enableButtons()
         self.readyStatusBar()
         self.project_opened = True
-        IOUtils.print(
+        IOUtils.IOUtils.print(
             f"Project {project_name} created")
 
         # change window title
@@ -497,8 +497,8 @@ class MainWindow(QMainWindow):
         
         project_path = IOUtils.ask_for_directory(qt=True)
         assert project_path is not None, "Project Path not selected"
-        IOUtils.print(f"Project path: {project_path}")
-        IOUtils.print("Loading the project")
+        IOUtils.IOUtils.print(f"Project path: {project_path}")
+        IOUtils.IOUtils.print("Loading the project")
 
         self.project = ProjectService.load_project(project_path)
 
@@ -511,7 +511,7 @@ class MainWindow(QMainWindow):
             self.showSTL(stlFile=stl_file)
         self.readyStatusBar()
         self.project_opened = True
-        IOUtils.print(
+        IOUtils.IOUtils.print(
             f"Project {self.project.name} created")
 
         # change window title
@@ -530,7 +530,7 @@ class MainWindow(QMainWindow):
         onGround = self.window.checkBoxOnGround.isChecked()
         self.project.settings.mesh.onGround = onGround
         self.project.on_ground = onGround
-        print("On Ground: ", onGround)
+        IOUtils.print("On Ground: ", onGround)
         minx = self.project.settings.mesh.domain.minx
         miny = self.project.settings.mesh.domain.miny
         minz = self.project.settings.mesh.domain.minz
@@ -583,7 +583,7 @@ class MainWindow(QMainWindow):
         self.add_box_to_VTK(minX=minx, minY=miny, minZ=minz,
                             maxX=maxx, maxY=maxy, maxZ=maxz, boxName="Domain")
         self.readyStatusBar()
-        # print("Domain: ",minx,miny,minz,maxx,maxy,maxz,nx,ny,nz)
+        # IOUtils.print("Domain: ",minx,miny,minz,maxx,maxy,maxz,nx,ny,nz)
 
 
 # -------------- End of Event Handlers -------------#

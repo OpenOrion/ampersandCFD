@@ -18,9 +18,11 @@
 """
 
 from pydantic import BaseModel, Field
-from typing import Dict, List, Literal, Union, Optional
+from typing import Dict, List, Literal, Union, Optional, cast
 
 
+
+Location = tuple[float, float, float]
 RefinementAmount = Literal["coarse", "medium", "fine"]
 class FluidProperties(BaseModel):
     rho: float
@@ -179,16 +181,14 @@ class Domain(BoundingBox):
 
 
 Number = Union[int, float]
-BCPatchType = Literal['patch', 'wall', 'inlet', 'outlet', 'symmetry']
-PatchPurpose = Literal['inlet', 'outlet', 'symmetry', 'wall', 'searchableBox', 'refinementSurface', 'refinementRegion', 'cellZone', 'baffles', 'symmetry','cyclic','empty']
-PatchProperty = Union[tuple[Number, Number, Number], Number, None]
+PatchType = Literal['inlet', 'outlet', 'symmetry', 'wall', 'searchableBox', 'refinementSurface', 'refinementRegion', 'cellZone', 'baffles', 'symmetry','cyclic','empty', "movingWall"]
+PatchProperty = Union[tuple[Number, Number, Number], Number]
 class Patch(BaseModel):
-    purpose: PatchPurpose
-    property: PatchProperty = None
+    type: PatchType
+    property: Optional[PatchProperty] = None
     
 
 class BCPatch(Patch):
-    type: BCPatchType
     faces: List[int]
 
 class TriSurfaceMeshGeometry(Patch):
@@ -224,7 +224,7 @@ class CastellatedMeshControls(BaseModel):
     refinementSurfaces: List = []
     resolveFeatureAngle: int = 25
     refinementRegions: List = []
-    locationInMesh: tuple[float, float, float] = (0, 0, 0)
+    locationInMesh: Location = (0, 0, 0)
     allowFreeStandingZoneFaces: str = 'false'
 
 
@@ -286,20 +286,18 @@ class MeshSettings(BaseModel):
     internalFlow: bool = False
 
     patches: dict[str, BCPatch] = {
-        'inlet': BCPatch(type='patch', purpose='inlet',
-                         property=(1, 0, 0), faces=[0, 4, 7, 3]),
-        'outlet': BCPatch(type='patch', purpose='outlet',
-                          property=None, faces=[1, 5, 6, 2]),
-        'front': BCPatch(type='symmetry', purpose='symmetry',
-                         property=None, faces=[0, 1, 5, 4]),
-        'back': BCPatch(type='symmetry', purpose='symmetry',
-                        property=None, faces=[2, 3, 7, 6]),
-        'bottom': BCPatch(type='symmetry', purpose='symmetry',
-                          property=None, faces=[0, 1, 2, 3]),
-        'top': BCPatch(type='symmetry', purpose='symmetry',
-                       property=None, faces=[4, 5, 6, 7]),
+        'inlet': BCPatch(type='inlet', property=(1, 0, 0), faces=[0, 4, 7, 3]),
+        'outlet': BCPatch(type='outlet', faces=[1, 5, 6, 2]),
+        'front': BCPatch(type='symmetry', faces=[0, 1, 5, 4]),
+        'back': BCPatch(type='symmetry', faces=[2, 3, 7, 6]),
+        'bottom': BCPatch(type='symmetry', faces=[0, 1, 2, 3]),
+        'top': BCPatch(type='symmetry', faces=[4, 5, 6, 7]),
     }
     geometry: dict[str, Geometry] = {}
+
+    @property
+    def triSurfaceMeshGeometry(self):
+        return {k: v for k, v in self.geometry.items() if isinstance(v, TriSurfaceMeshGeometry)}
 
 class SnappyHexMeshSettings(MeshSettings):
     snappyHexSteps: SnappyHexSteps = SnappyHexSteps()
@@ -501,7 +499,7 @@ class BoundaryCondition(BaseModel):
     u_type: str
     u_value: Union[tuple[float, float, float], str]
     p_type: Literal['fixedValue', 'zeroGradient', 'totalPressure']
-    p_value: Union[int, str]
+    p_value: Union[float, str]
     k_type: Literal['fixedValue', 'zeroGradient', 'kqRWallFunction']
     k_value: Union[float, str]
     omega_type: Literal['fixedValue', 'zeroGradient', 'omegaWallFunction']
@@ -549,6 +547,7 @@ class BoundaryConditions(BaseModel):
 
 class ControlSettings(BaseModel):
     transient: bool = False
+    potentialFoam: bool = True
     application: str = 'simpleFoam'
     startTime: int = 0
     endTime: int = 1000
@@ -573,19 +572,13 @@ class ControlSettings(BaseModel):
 
 
 class ParallelSettings(BaseModel):
-    parallel: bool = True
     numberOfSubdomains: int = 4
     method: str = 'scotch'
 
 
-class SimulationFlowSettings(BaseModel):
-    parallel: bool = True
-    snappyHexMesh: bool = True
-    initialize: bool = True
-    potentialFoam: bool = True
-    solver: str = 'simpleFoam'
-    postProc: bool = True
-    functionObjects: List = []
+# class SimulationFlowSettings(BaseModel):
+#     parallel: bool = True
+#     solver: str = 'simpleFoam'
 
 
 class PostProcessSettings(BaseModel):
@@ -594,19 +587,66 @@ class PostProcessSettings(BaseModel):
     massFlow: bool = True
     yPlus: bool = True
     forces: bool = True
-    probeLocations: List = []
+    probeLocations: set[Location] = Field(default_factory=set)
+
+
+class TransientInput(BaseModel):
+    end_time: int
+    time_step: int
+    write_interval: int
 
 
 class SimulationSettings(BaseModel):
     mesh: SnappyHexMeshSettings = SnappyHexMeshSettings()
-    physicalProperties: PhysicalProperties = PhysicalProperties()
+    physical_properties: PhysicalProperties = PhysicalProperties()
     numerical: NumericalSettings = NumericalSettings()
-    inletValues: InletValues = InletValues()
+    inlet_values: InletValues = InletValues()
     solver: SolverSettings = SolverSettings()
-    boundaryConditions: BoundaryConditions = BoundaryConditions()
+    boundary_conditions: BoundaryConditions = BoundaryConditions()
     control: ControlSettings = ControlSettings()
-    parallel: ParallelSettings = ParallelSettings()
-    simulationFlow: SimulationFlowSettings = SimulationFlowSettings()
-    postProcess: PostProcessSettings = PostProcessSettings()
+    parallel: Optional[ParallelSettings] = ParallelSettings()
+    post_process: PostProcessSettings = PostProcessSettings()
 
+    def set_half_model(self, is_half_model: bool):
+        self.mesh.halfModel = is_half_model
+        if is_half_model:
+            self.mesh.patches['back'].type = 'symmetry'
+
+    def set_inlet_values(self, U: Optional[tuple[float, float, float]] = None):
+        if (not self.mesh.internalFlow):  # external flow
+            assert U is not None, "Inlet velocity is not set, required for external flow"
+            self.inlet_values.U = U
+            self.boundary_conditions.velocityInlet.u_value = U
+        else:  # internal flow
+            # Use inlet values from the stl file
+            # TODO: check this out and ensure it sets once
+            for geometry in self.mesh.geometry.values():
+                if isinstance(geometry, TriSurfaceMeshGeometry) and geometry.type == 'inlet':
+                    U_stl = cast(tuple[float, float, float], geometry.property or U)
+                    self.boundary_conditions.velocityInlet.u_value = U_stl
+                    self.inlet_values.U = U_stl
+
+    def set_transient_settings(self, transient: Union[TransientInput, Literal[False]]):
+        self.control.transient = isinstance(transient, TransientInput)
+        if isinstance(transient, TransientInput):
+            self.control.application = 'pimpleFoam'
+            self.control.endTime = transient.end_time
+            self.control.writeInterval = transient.write_interval
+            self.control.deltaT = transient.time_step
+            self.control.adjustTimeStep = 'no'
+            self.control.maxCo = 0.9
+            self.numerical.ddtSchemes.default = 'Euler'
+            # if steady state, SIMPLEC is used. If transient, PIMPLE is used
+            # for PIMPLE, the relaxation factors are set to 0.7 and p = 0.3
+            self.numerical.relaxationFactors.p = 0.3
+
+
+    def set_post_process_settings(self, useFOs: bool):
+        self.post_process.FOs = useFOs
+        meshPoint = self.mesh.castellatedMeshControls.locationInMesh
+        self.post_process.massFlow = useFOs
+        self.post_process.minMax = useFOs
+        self.post_process.yPlus = useFOs
+        self.post_process.forces = useFOs
+        self.post_process.probeLocations.add(meshPoint)
 

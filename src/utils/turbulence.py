@@ -92,3 +92,11 @@ class TurbulenceUtils:
         return omega
 
   
+
+    @staticmethod
+    def calc_renolds_number(U: float, L: float, nu: float) -> float:
+        return U*L/nu
+    
+    @staticmethod
+    def calc_delta(Re: float, L=1.0):
+        return 0.37*L/Re**(0.2)

@@ -1,30 +1,28 @@
-import os
 from pathlib import Path
 import shutil
 from typing import Union
 
 import yaml
-from src.generators.blockMeshDict import create_blockMeshDict
-from src.generators.boundaryConditionsDict import create_boundary_conditions
-from src.generators.controlDict import createControlDict
-from src.generators.decomposeParDict import createDecomposeParDict
+from src.generators.blockMeshDict import BlockMeshDictGenerator
+from src.generators.boundaryConditionDict import BoundaryConditionDictGenerator
+from src.generators.controlDict import ControlDictGenerator
+from src.generators.decomposeParDict import DecomposeParDictGenerator
+from src.generators.fvDict import FVDictGenerator
+from src.models.inputs import CreateProjectInput, PathLike, StlInput
 from src.models.settings import SimulationSettings
-from src.generators.numericalSettingsDict import create_fvSchemesDict, create_fvSolutionDict
-from src.generators.postProcessDict import PostProcess
-from src.utils.common import crlf_to_LF
+from src.generators.postProcessDict import PostProcessGenerator
 from src.utils.data_input import IOUtils
-from src.models.settings import PatchPurpose, PatchProperty
 from src.project import AmpersandProject
-from src.generators.scriptGenerator import ScriptGenerator
-from src.generators.snappyHexMeshDict import create_snappyHexMeshDict
-from src.generators.surfaceExtractorDict import create_surfaceDict
-from src.generators.transportAndTurbulenceDict import create_transportPropertiesDict, create_turbulencePropertiesDict
+from src.generators.cmdScript import CmdScriptGenerator
+from src.generators.snappyHexMeshDict import SnappyHexMeshDictGenerator
+from src.generators.surfaceExtractorDict import SurfaceExtractorDictGenerator
+from src.generators.constantDict import ConstantDictGenerator
 from src.utils.stl_analysis import StlAnalysis
 
 
 class ProjectService:
     @staticmethod
-    def create_project(project_path: Union[str, Path]):
+    def create_project(project_path: PathLike, input: CreateProjectInput):
         """Create the project directory structure for an OpenFOAM case.
         
         Args:
@@ -34,37 +32,42 @@ class ProjectService:
             ValueError: If project_path is None
             OSError: If there are issues creating directories or changing directory
         """
-        project = AmpersandProject(project_path)
-
         IOUtils.print("Creating the project")
 
         if project_path is None:
             raise ValueError("No project path provided")
 
-        project_path = Path(project_path)
-        
-        # Create required OpenFOAM directories 
-        required_dirs = [
-            project_path / "0",
-            project_path / "constant",
-            project_path / "system",
-            project_path / "constant" / "triSurface"
-        ]
 
-        try:
-            for directory in required_dirs:
-                if not directory.exists():
-                    directory.mkdir(parents=True)
-                    IOUtils.print(f"Created {directory} directory")
-        except OSError as e:
-            raise OSError(f"Failed to create OpenFOAM directory structure: {e}")
-        
-        ProjectService.write_settings(project)
+        settings = SimulationSettings()
+
+        settings.mesh.refAmount = input.refinement_amount
+        settings.mesh.internalFlow = input.is_internal_flow
+        settings.mesh.onGround = input.on_ground or False
+        settings.physical_properties.fluid = input.fluid
+
+        if settings.parallel and input.n_core > 1:
+            settings.parallel.numberOfSubdomains = input.n_core
+        else:
+            settings.parallel = None
+
+        settings.set_inlet_values(input.inlet_values)
+        settings.set_transient_settings(input.transient)
+        settings.set_half_model(input.is_half_model)
+
+        project = AmpersandProject(project_path, settings)
+
+
+        for stl_file in input.stl_files:
+            ProjectService.add_stl_file(project, stl_file)
+
+        settings.set_post_process_settings(input.use_function_objects)
+
+        ProjectService.write_project(project)
 
         return project
 
     @staticmethod
-    def load_project(project_path: Union[str, Path]):
+    def load_project(project_path: PathLike):
         IOUtils.print(f"Loading project from path: {project_path}")
         settings = SimulationSettings.model_validate(yaml.safe_load(f"{project_path}/project_settings.yaml"))
         project = AmpersandProject(project_path, settings)
@@ -76,8 +79,24 @@ class ProjectService:
 
     @staticmethod
     def write_project(project: AmpersandProject):
-        ProjectService.write_settings(project)
+        # Create required OpenFOAM directories 
+        required_dirs = [
+            project.project_path / "0",
+            project.project_path / "constant",
+            project.project_path / "system",
+            project.project_path / "constant" / "triSurface"
+        ]
+
+        try:
+            for directory in required_dirs:
+                if not directory.exists():
+                    directory.mkdir(parents=True)
+                    IOUtils.print(f"Created {directory} directory")
+        except OSError as e:
+            raise OSError(f"Failed to create OpenFOAM directory structure: {e}")
+        
         ProjectService.write_openfoam_files(project)
+        ProjectService.write_settings(project)
 
     @staticmethod
     def write_settings(project: AmpersandProject):
@@ -87,23 +106,23 @@ class ProjectService:
         )
 
 
+ 
     @staticmethod
-    def add_stl_file(project: AmpersandProject, stl_path: Union[str, Path], property: PatchProperty, purpose: PatchPurpose='wall'):
+    def add_stl_file(project: AmpersandProject, stl_file: StlInput):
         # Convert paths to Path objects
-        stl_path = Path(stl_path)
-        stl_name=stl_path.name
-        dest_path = project.project_path / "constant" / "triSurface" / stl_name
+        stl_path = Path(stl_file.stl_path)
 
         # Validate input file
         if not stl_path.exists():
             raise FileNotFoundError(f"STL file {stl_path} does not exist")
             
-        if dest_path.exists():
-            raise ValueError(f"STL file {stl_name} already exists in project")
-
-        StlAnalysis.update_settings(project.settings, stl_path, purpose, property)
+        StlAnalysis.add_stl_to_settings(project.settings, stl_path, stl_file.purpose, stl_file.property)
 
         # Copy STL file to project
+        dest_path = Path(project.project_path) / "constant" / "triSurface" / stl_path.name
+        # if dest_path.exists():
+        #     raise ValueError(f"STL file {stl_path.name} already exists in project")
+
         try:
             dest_path.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(stl_path, dest_path)
@@ -124,62 +143,27 @@ class ProjectService:
     def write_openfoam_files(project: AmpersandProject):
         if (not project.project_path.exists()):
             raise FileNotFoundError(f"Project not found at: {project.project_path}")
-
-        create_boundary_conditions(project.settings.mesh, project.settings.boundaryConditions, f"{project.project_path}/0")
+        project_path = project.project_path
+        BoundaryConditionDictGenerator.write(project.settings.mesh, project.settings.boundary_conditions, project_path)
 
         # go inside the constant directory
-        IOUtils.print("Creating physical properties and turbulence properties")
-        # create transportProperties file
-        tranP = create_transportPropertiesDict(project.settings.physicalProperties)
-        # create turbulenceProperties file
-        turbP = create_turbulencePropertiesDict(project.settings.physicalProperties)
-        Path(f"{project.project_path}/constant/transportProperties").write_text(tranP)
-        Path(f"{project.project_path}/constant/turbulenceProperties").write_text(turbP)
+        IOUtils.print("Creating constant properties")
+        ConstantDictGenerator.write(project.settings.physical_properties, project_path)
 
         # create the controlDict file
         IOUtils.print("Creating the system files")
-        controlDict = createControlDict(project.settings.control)
-        Path(f"{project.project_path}/system/controlDict").write_text(controlDict)
+        ControlDictGenerator.write(project.settings.control, project_path)
+        BlockMeshDictGenerator.write(project.settings.mesh, project_path)
+        SnappyHexMeshDictGenerator.write(project.settings.mesh, project_path)
         
-        blockMeshDict = create_blockMeshDict(project.settings.mesh)
-        Path(f"{project.project_path}/system/blockMeshDict").write_text(blockMeshDict)
         
-        snappyHexMeshDict = create_snappyHexMeshDict(project.settings.mesh)
-        Path(f"{project.project_path}/system/snappyHexMeshDict").write_text(snappyHexMeshDict)
-        
-        surfaceFeatureExtractDict = create_surfaceDict(project.settings.mesh, "surfaceFeatureExtractDict")
-        Path(f"{project.project_path}/system/surfaceFeatureExtractDict").write_text(surfaceFeatureExtractDict)
-        
-        fvSchemesDict = create_fvSchemesDict(project.settings.numerical)
-        Path(f"{project.project_path}/system/fvSchemes").write_text(fvSchemesDict)
-        
-        fvSolutionDict = create_fvSolutionDict(project.settings.numerical, project.settings.solver)
-        Path(f"{project.project_path}/system/fvSolution").write_text(fvSolutionDict)
-        
-        decomposeParDict = createDecomposeParDict(project.settings.parallel)
-        Path(f"{project.project_path}/system/decomposeParDict").write_text(decomposeParDict)
-        
-        FODict = PostProcess.create_FOs(project.settings.mesh, project.settings.postProcess, useFOs=project.settings.postProcess.FOs)
-        Path(f"{project.project_path}/system/FOs").write_text(FODict)
+        SurfaceExtractorDictGenerator.write(project.settings.mesh, "surfaceFeatureExtractDict", project_path)
+        FVDictGenerator.write(project.settings.numerical, project.settings.solver, project_path)
+        if project.settings.parallel:
+            DecomposeParDictGenerator.write(project.settings.parallel, project_path)
+        PostProcessGenerator.write(project.settings.mesh, project.settings.post_process, project_path)
+        CmdScriptGenerator.write(project.settings, project_path)
 
-        # create mesh script
-        IOUtils.print("Creating scripts for meshing and running the simulation")
-        meshScript = ScriptGenerator.create_mesh_script(project.settings.simulationFlow)
-        Path(f"{project.project_path}/mesh").write_text(meshScript)
-        
-        # create simulation script
-        simulationScript = ScriptGenerator.create_mesh_script(project.settings.simulationFlow)
-        Path(f"{project.project_path}/run").write_text(simulationScript)
-        
-        crlf_to_LF(f"{project.project_path}/mesh")
-        crlf_to_LF(f"{project.project_path}/run")
-        
-        mesh_script = Path(project.project_path) / "mesh"
-        run_script = Path(project.project_path) / "run"
-        if os.name != 'nt':
-            mesh_script.chmod(0o755)
-            run_script.chmod(0o755)
-        
         IOUtils.print("\n-----------------------------------")
         IOUtils.print("Project files created successfully!")
         IOUtils.print("-----------------------------------\n")
@@ -210,7 +194,7 @@ class ProjectService:
                 raise FileNotFoundError(f"No files found in {path}.")
 
     @staticmethod
-    def check_log_files(project_path: Union[str, Path]):
+    def check_log_files(project_path: PathLike):
         project_path = Path(project_path)
         log_files = list(project_path.iterdir())
         if 'log.simpleFoam' in [f.name for f in log_files] or 'log.pimpleFoam' in [f.name for f in log_files]:
@@ -220,7 +204,7 @@ class ProjectService:
         return False
 
     @staticmethod
-    def check_post_process_files(project_path: Union[str, Path]):
+    def check_post_process_files(project_path: PathLike):
         project_path = Path(project_path)
         post_process_path = project_path / "postProcessing/probe/0"
         if not post_process_path.exists():
@@ -233,7 +217,7 @@ class ProjectService:
         return True
 
     @staticmethod
-    def check_forces_files(project_path: Union[str, Path]):
+    def check_forces_files(project_path: PathLike):
         project_path = Path(project_path)
         forces_path = project_path / "postProcessing/forces/0"
         if not forces_path.exists():

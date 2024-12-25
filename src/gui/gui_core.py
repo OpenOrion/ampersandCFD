@@ -18,6 +18,7 @@
 """
 
 # Description: This file contains the main class for the Ampersand CFD application. The class is decorated with the TrameApp decorator, which is used to create a Trame application. The class contains methods to handle the opening of a file, adding a box, adding a sphere, showing a wireframe, showing a surface, and showing a surface with edges. The class also contains a method to build the user interface of the application. The user interface contains a toolbar with three buttons, a drawer with buttons to open a file, add a box, and add a sphere, and a main content area with a VtkLocalView widget to display the 3D object. The class also contains a method to update the VtkLocalView widget with the new 3D object.
+from src.utils.data_input import IOUtils
 from trame.app import get_server
 from trame.decorators import TrameApp, change, controller
 from trame.ui.vuetify import SinglePageWithDrawerLayout
@@ -72,7 +73,7 @@ class ampersand:
         self.state.resolution = 6
         
     def click_open(self):
-        print(f"Open button clicked")
+        IOUtils.print(f"Open button clicked")
         file_name=self.file_dialog()
         if(file_name != ""):
             self.stl_file = file_name 
@@ -80,8 +81,8 @@ class ampersand:
             self._update_vtk()
             self._build_ui()
         else:
-            print("No file selected")
-        #print(f"Opening {file_name}")
+            IOUtils.print("No file selected")
+        #IOUtils.print(f"Opening {file_name}")
         #self.stl_file = file_name
 
     def file_dialog(self):
@@ -90,7 +91,7 @@ class ampersand:
         return file_name
 
     def add_box(self):
-        print(f"Add box clicked")
+        IOUtils.print(f"Add box clicked")
         # Show a pop-up dialog to ask for dimensions
         with vuetify.VDialog(v_model="dialog", max_width="500px"):
             with vuetify.VCard():
@@ -99,16 +100,16 @@ class ampersand:
                 
 
     def add_sphere(self):
-        print(f"Add sphere clicked")
+        IOUtils.print(f"Add sphere clicked")
 
     def show_wireframe(self):
-        print(f"Show wireframe clicked")
+        IOUtils.print(f"Show wireframe clicked")
 
     def show_surface(self):
-        print(f"Show surface clicked")
+        IOUtils.print(f"Show surface clicked")
     
     def show_surface_with_edges(self):
-        print(f"Show surface with edges clicked")
+        IOUtils.print(f"Show surface with edges clicked")
         
 
     

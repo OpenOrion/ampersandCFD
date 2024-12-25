@@ -18,13 +18,16 @@
 """
 
 
-
-from src.models.settings import MeshSettings, SnappyHexMeshSettings
+from pathlib import Path
+from typing import Union
+from src.models.settings import MeshSettings
 from src.utils.generation import GenerationUtils
 
 
-def create_blockMeshDict(mesh_settings: MeshSettings) -> str:
-    return f"""{GenerationUtils.createFoamHeader("dictionary", "blockMeshDict")}
+class BlockMeshDictGenerator:
+    @staticmethod
+    def generate(mesh_settings: MeshSettings) -> str:
+        return f"""{GenerationUtils.createFoamHeader("dictionary", "blockMeshDict")}
 
 // ********* Domain *********
 scale {mesh_settings.scale};
@@ -70,3 +73,6 @@ mergePatchPairs
 
 // ************************************************************************* //
 """
+    @staticmethod
+    def write(mesh_settings: MeshSettings, project_path: Union[str, Path]):
+        Path(f"{project_path}/system/blockMeshDict").write_text(BlockMeshDictGenerator.generate(mesh_settings))

@@ -17,18 +17,21 @@
  */
 """
 
-from src.models.settings import SimulationFlowSettings
+import os
+from pathlib import Path
+from typing import Union
+from src.models.settings import SimulationSettings
+from src.utils.common import crlf_to_LF
 
-class ScriptGenerator:
-
+class CmdScriptGenerator:
     @staticmethod
-    def create_mesh_script(simulationFlowSettings: SimulationFlowSettings):
+    def generate_mesh_script(settings: SimulationSettings):
         cmdMesh = f"""#!/bin/sh
 cd "${{0%/*}}" || exit                                # Run from this directory
 . ${{WM_PROJECT_DIR:?}}/bin/tools/RunFunctions        # Tutorial run functions
 #-----------------------------------------------------
 """
-        if (simulationFlowSettings.parallel):
+        if (settings.parallel):
             cmdMesh += f"""
 foamCleanTutorials
 #cp -r 0 0.orig
@@ -54,13 +57,14 @@ runApplication snappyHexMesh -overwrite
 
     # Generate run script for incompressible flow simulations (simpleFoam, pimpleFoam, etc.)
     @staticmethod
-    def create_simulation_script(simulationFlowSettings: SimulationFlowSettings):
+    def generate_run_script(settings: SimulationSettings):
+        solver_name = settings.control.application
         cmdSimulation = f"""#!/bin/sh
 cd "${{0%/*}}" || exit                                # Run from this directory
 . ${{WM_PROJECT_DIR:?}}/bin/tools/RunFunctions        # Tutorial run functions
 #-----------------------------------------------------
 """
-        if (simulationFlowSettings.parallel):
+        if (settings.parallel):
             cmdSimulation += f"""
 #rm -rf 0
 #cp -r 0.orig 0
@@ -69,42 +73,62 @@ runApplication decomposePar -force
 touch case.foam
 runParallel renumberMesh -overwrite
 """
-            if (simulationFlowSettings.potentialFoam):
+            if (settings.control.potentialFoam):
                 cmdSimulation += f"""
 runParallel potentialFoam
-runParallel {simulationFlowSettings.solver}
+runParallel {solver_name}
 """
             else:
                 cmdSimulation += f"""
-runParallel {simulationFlowSettings.solver}
+runParallel {solver_name}
 """
 
         else:
-            if simulationFlowSettings.potentialFoam:
+            if settings.control.potentialFoam:
                 cmdSimulation += f"""
 runApplication potentialFoam
-runApplication {simulationFlowSettings.solver}
+runApplication {solver_name}
 """
             else:
                 cmdSimulation += f"""
-runApplication {simulationFlowSettings.solver}
+runApplication {solver_name}
 """
         return cmdSimulation
 
     # Generate postprocessing script
     @staticmethod
-    def generate_postprocessing_script(simulationFlowSettings):
+    def generate_postprocessing_script(settings: SimulationSettings):
+        solver_name = settings.control.application
+
         cmdPostProcessing = f"""#!/bin/sh
 cd "${{0%/*}}" || exit                                # Run from this directory
 . ${{WM_PROJECT_DIR:?}}/bin/tools/RunFunctions        # Tutorial run functions
 #-----------------------------------------------------
 """
-        if (simulationFlowSettings.parallel):
+        if (settings.parallel):
             cmdPostProcessing += f"""
-runParallel {simulationFlowSettings.solver} -postProcess
+runParallel {solver_name} -postProcess
 """
         else:
             cmdPostProcessing += f"""
-runApplication {simulationFlowSettings.solver} -postProcess
+runApplication {solver_name} -postProcess
 """
         return cmdPostProcessing
+
+    @staticmethod
+    def write(settings: SimulationSettings, project_path: Union[Path, str]):
+        meshScript = CmdScriptGenerator.generate_mesh_script(settings)
+        Path(f"{project_path}/mesh").write_text(meshScript)
+        
+        # create simulation script
+        simulationScript = CmdScriptGenerator.generate_run_script(settings)
+        Path(f"{project_path}/run").write_text(simulationScript)
+        
+        crlf_to_LF(f"{project_path}/mesh")
+        crlf_to_LF(f"{project_path}/run")
+        
+        mesh_script = Path(project_path) / "mesh"
+        run_script = Path(project_path) / "run"
+        if os.name != 'nt':
+            mesh_script.chmod(0o755)
+            run_script.chmod(0o755)

@@ -17,9 +17,8 @@
  */
 """
 from pathlib import Path
-from typing import Optional, Union, cast
-from src.models.inputs import FluidProperties
-from src.models.settings import SimulationSettings, TriSurfaceMeshGeometry, RefinementAmount
+from typing import Optional, Union
+from src.models.settings import SimulationSettings, TriSurfaceMeshGeometry, PatchType, PatchProperty
 from src.utils.data_input import IOUtils
 
 
@@ -32,112 +31,20 @@ class AmpersandProject:
     def name(self):
         return self.project_path.name
 
-    # TODO: fix this later
-    def change_boundary_condition(self, bcName: str, newBC: str):
+    def update_patch(self, name: str, type: PatchType, property: PatchProperty):
         if not self.settings.mesh.internalFlow:  # if it is external flow
             bcPatches = self.settings.mesh.patches
-            for name, aPatch in self.settings.mesh.patches.items():
-                if bcName == name:
-                    aPatch.type = newBC
-                    IOUtils.print(
-                        f"Boundary condition {bcName} changed to {newBC}")
-                    return 0
-            if bcName in bcPatches:
-                self.settings.mesh.patches[bcName].type = newBC
-                self.settings.mesh.patches[bcName].purpose = newBC
-                newProperty = self.get_property(newBC)
-                self.settings.mesh.patches[bcName].property = newProperty
-                IOUtils.print(
-                    f"Boundary condition {bcName} changed to {newBC}")
-                return 0
-            else:
-                IOUtils.print(
-                    "Boundary condition not found in the list")
-        for name, geometry in self.settings.mesh.geometry:
-            if name == bcName:
-                geometry.purpose = newBC
-                newProperty = self.get_property(newBC)
-                self.settings.mesh.patches[bcName].property = newProperty
-                IOUtils.print(
-                    f"Boundary condition of {bcName} changed to {newBC}")
-                return 0
-        return -1
 
+        if name in bcPatches:
+            self.settings.mesh.patches[name].type = type
+            self.settings.mesh.patches[name].property = property
+            IOUtils.print(f"Boundary Patch {name} changed to {type} with property {property}")
+        elif name in self.settings.mesh.geometry:
+            self.settings.mesh.patches[name].type = type
+            self.settings.mesh.patches[name].property = property
+            IOUtils.print(f"Geometry Patch {name} changed to {type} with property {property}")
 
-    
-
-    def set_flow_type(self, is_internal_flow=False):
-        self.settings.mesh.internalFlow = is_internal_flow
-
-    def set_half_model(self, is_half_model: bool):
-        self.settings.mesh.halfModel = is_half_model
-
-        if is_half_model:
-            self.settings.mesh.patches['back'].type = 'symmetry'
-
-    def set_inlet_values(self, U: Optional[tuple[float, float, float]] = None):
-        if (not self.settings.mesh.internalFlow):  # external flow
-            assert U is not None, "Inlet velocity is not set, required for external flow"
-            self.settings.inletValues.U = U
-            self.settings.boundaryConditions.velocityInlet.u_value = U
-        else:  # internal flow
-            # Use inlet values from the stl file
-            IOUtils.print("Setting inlet values for various inlet boundaries")
-            # TODO: check this out and ensure it sets once
-            for geometry in self.settings.mesh.geometry.values():
-                if isinstance(geometry, TriSurfaceMeshGeometry) and geometry.purpose == 'inlet':
-                    U_stl = cast(tuple[float, float, float], geometry.property or U)
-                    self.settings.boundaryConditions.velocityInlet.u_value = U_stl
-                    self.settings.inletValues.U = U_stl
-
-    def set_fluid_properties(self, fluid: FluidProperties):
-        self.settings.physicalProperties.fluid = fluid
-
-    def set_parallel(self, n_core: int):
-        self.settings.parallel.numberOfSubdomains = n_core
-
-    # set the turbulence model for the simulation
-    def set_turbulence_model(self, turbulence_model='kOmegaSST'):
-        self.settings.physicalProperties.turbulenceModel = turbulence_model
-
-    def set_is_transient(self, is_transient: bool):
-        self.settings.control.transient = is_transient
-
-    def set_transient_settings(self, is_transient: bool, end_time: int, write_interval: int, time_step: int):
-        self.set_is_transient(is_transient)
-        if is_transient:
-            IOUtils.print("Transient simulation settings")
-            self.settings.control.application = 'pimpleFoam'
-            self.settings.simulationFlow.solver = 'pimpleFoam'
-            self.settings.control.endTime = end_time
-            self.settings.control.writeInterval = write_interval
-            self.settings.control.deltaT = time_step
-            self.settings.control.adjustTimeStep = 'no'
-            self.settings.control.maxCo = 0.9
-            self.settings.numerical.ddtSchemes.default = 'Euler'
-            # if steady state, SIMPLEC is used. If transient, PIMPLE is used
-            # for PIMPLE, the relaxation factors are set to 0.7 and p = 0.3
-            self.settings.numerical.relaxationFactors.p = 0.3
-
-    def set_on_ground(self, on_ground: bool):
-        self.settings.mesh.onGround = on_ground
-        # TODO: ground doesn't exist
-        # if on_ground:
-        #     self.settings.mesh.patches['ground'].type = 'wall'
-
-    def set_refinement_amount(self, ref_amount: RefinementAmount):
-        self.settings.mesh.refAmount = ref_amount
-
-
-    def set_post_process_settings(self, useFOs: bool):
-        self.settings.postProcess.FOs = useFOs
-        meshPoint = list(self.settings.mesh.castellatedMeshControls.locationInMesh)
-        self.settings.postProcess.massFlow = True
-        self.settings.postProcess.minMax = True
-        self.settings.postProcess.yPlus = True
-        self.settings.postProcess.forces = True
-        # the default probe location for monitoring of flow variables
-        self.settings.postProcess.probeLocations.append(meshPoint)
+        raise ValueError(f"Boundary condition {name} not found")
 
 
     def summarize_project(self):
@@ -148,9 +55,7 @@ class AmpersandProject:
             IOUtils.print(f"On Ground: {self.settings.mesh.onGround}")
         IOUtils.print(f"Transient: {self.settings.control.transient}")
         IOUtils.print(self.settings.mesh.domain.__repr__())
-        # TODO: maybe turn this back on later
-        # AmpersandUtils.list_stl_files(self.stl_files)
-        
+        self.summarize_stl_files()
 
     def summarize_boundary_conditions(self):
         boundaries = []
@@ -160,14 +65,14 @@ class AmpersandProject:
         # Handle external flow boundary conditions first
         if not self.settings.mesh.internalFlow:
             for i, (patch_name, patch) in enumerate(self.settings.mesh.patches.items(), 1):
-                IOUtils.print(f"{i:<5}{patch_name:<20}{patch.purpose:<20}{str(patch.property):<15}")
+                IOUtils.print(f"{i:<5}{patch_name:<20}{patch.type:<20}{str(patch.property):<15}")
                 boundaries.append(patch_name)
 
         # Handle geometry boundary conditions 
         start_i = len(boundaries) + 1
         for i, (patch_name, patch) in enumerate(self.settings.mesh.geometry.items(), start_i):
-            if patch.purpose not in ['refinementRegion', 'refinementSurface']:
-                IOUtils.print(f"{i:<5}{patch_name:<20}{patch.purpose:<20}{str(patch.property):<15}")
+            if patch.type not in ['refinementRegion', 'refinementSurface']:
+                IOUtils.print(f"{i:<5}{patch_name:<20}{patch.type:<20}{str(patch.property):<15}")
                 boundaries.append(patch_name)
 
         return boundaries
@@ -188,7 +93,7 @@ class AmpersandProject:
             if isinstance(geometry, TriSurfaceMeshGeometry):
                 if (geometry.property == None):
                     stl_property = "None"
-                    if geometry.purpose == 'wall':
+                    if geometry.type == 'wall':
                         stl_property = f"nLayers: {geometry.nLayers}"
                     else:
                         stl_property = "None"
@@ -196,14 +101,14 @@ class AmpersandProject:
                     stl_property = f"[{geometry.property[0]} {
                         geometry.property[1]} {geometry.property[2]}]"
                 elif isinstance(geometry.property, tuple):
-                    if geometry.purpose == 'inlet':
+                    if geometry.type == 'inlet':
                         stl_property = f"U: [{geometry.property[0]} {
                             geometry.property[1]} {geometry.property[2]}]"
-                    elif geometry.purpose == 'cellZone':
+                    elif geometry.type == 'cellZone':
                         stl_property = f"Refinement: {geometry.property[0]}"
                 else:
                     stl_property = geometry.property
-                IOUtils.print(f"{i+1:<5}{geometry_name:<20}{geometry.purpose:<20}({geometry.refineMin} {geometry.refineMax}{')':<11}{stl_property:<15}")
+                IOUtils.print(f"{i+1:<5}{geometry_name:<20}{geometry.type:<20}({geometry.refineMin} {geometry.refineMax}{')':<11}{stl_property:<15}")
                 stl_files.append(geometry_name)
         IOUtils.print_line()
         return stl_files

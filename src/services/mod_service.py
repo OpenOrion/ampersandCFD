@@ -18,8 +18,9 @@
 """
 
 
-from typing import Literal, cast
-from src.models.settings import BoundingBox, Domain, TriSurfaceMeshGeometry, PatchProperty
+from typing import Literal
+from src.models.inputs import StlInput
+from src.models.settings import BoundingBox, Domain, TriSurfaceMeshGeometry
 from src.services.project_service import ProjectService
 from src.utils.data_input import AmpersandDataInput, IOUtils
 from src.project import AmpersandProject
@@ -124,10 +125,12 @@ class ModService:
             assert stl_path is not None, "No STL file selected"
 
             # Get purpose and properties
-            purpose = AmpersandDataInput.get_purpose()
-            property = None if IOUtils.GUIMode else AmpersandDataInput.get_property(purpose)
+            purpose = AmpersandDataInput.get_patch_type()
+            property = None if IOUtils.GUIMode else AmpersandDataInput.get_patch_property(purpose)
+            stl_input = StlInput(stl_path=stl_path, purpose=purpose, property=property)
 
-            current_stl_file = ProjectService.add_stl_file(project, stl_path, property, purpose)
+
+            current_stl_file = ProjectService.add_stl_file(project, stl_input)
             yN = IOUtils.get_input("Add another STL file to the project (y/N)?: ")
         project.summarize_stl_files()
         
@@ -142,9 +145,8 @@ class ModService:
 
     @staticmethod
     def choose_stl_file(project: AmpersandProject) -> str:
-        IOUtils.print("Changing refinement levels")
         stl_file_names = project.summarize_stl_files()
-        stl_file_number = IOUtils.get_input("Enter the number of the file to change refinement level: ")
+        stl_file_number = IOUtils.get_input("Enter the number of the file: ")
         try:
             stl_file_number = int(stl_file_number)
             if stl_file_number <= 0 or stl_file_number > len(stl_file_names):
@@ -182,8 +184,10 @@ class ModService:
             else:
                 bc = boundary_conditions[bc_number-1]
                 IOUtils.print(f"Changing boundary condition for patch: {bc}")
-                newBcType = AmpersandDataInput.get_boundary_type()
-                project.change_boundary_condition(bc, newBcType)
+                patch_type = AmpersandDataInput.get_patch_type()
+                patch_property = AmpersandDataInput.get_patch_property()
+
+                project.update_patch(bc, patch_type, patch_property)
         except ValueError:
             IOUtils.print("Invalid input. Please try again.")
             ModService.change_boundary_conditions(project)
@@ -191,9 +195,9 @@ class ModService:
     @staticmethod
     def change_fluid_properties(project: AmpersandProject):
         IOUtils.print("Current fluid properties")
-        IOUtils.print(f"Density: {project.settings.physicalProperties.rho}")
-        IOUtils.print(f"Kinematic viscosity: {project.settings.physicalProperties.nu}")
+        IOUtils.print(f"Density: {project.settings.physical_properties.rho}")
+        IOUtils.print(f"Kinematic viscosity: {project.settings.physical_properties.nu}")
         fluid = AmpersandDataInput.choose_fluid_properties()
-        project.settings.physicalProperties.fluid = fluid
+        project.settings.physical_properties.fluid = fluid
 
 

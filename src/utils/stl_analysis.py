@@ -20,13 +20,22 @@
 import os
 from pathlib import Path
 from typing import Union
+from pydantic import BaseModel
 import vtk
 import numpy as np
 import math
-from src.models.settings import BoundingBox, Domain, MeshSettings, SearchableBoxGeometry, SimulationSettings, TriSurfaceMeshGeometry, RefinementAmount, PatchPurpose, PatchProperty
+from src.models.settings import BoundingBox, Domain, MeshSettings, SearchableBoxGeometry, SimulationSettings, TriSurfaceMeshGeometry, RefinementAmount, PatchType, PatchProperty
 from src.thirdparty.stlToOpenFOAM import find_inside_point, is_point_inside, read_stl_file
 from src.thirdparty.stlToOpenFOAM import extract_curvature_data, compute_curvature
 from src.utils.data_input import IOUtils
+from src.utils.turbulence import TurbulenceUtils
+
+class BoundaryLayer(BaseModel):
+    yPlus: float
+    y: float
+    first_layer_thickness: float
+    final_layer_thickness: float
+    nLayers: int
 
 
 class StlAnalysis:
@@ -69,13 +78,11 @@ class StlAnalysis:
         return {
             boxName: SearchableBoxGeometry(
                 type='searchableBox',
-                purpose="refinementRegion",
                 bbox=box,
                 refineMax=ref_level-1
             ), 
             "fineBox": SearchableBoxGeometry(
                 type='searchableBox',
-                purpose='refinementRegion',
                 bbox=fineBox,
                 refineMax=ref_level
             )
@@ -89,7 +96,6 @@ class StlAnalysis:
         box = BoundingBox(minx=-1000.0, maxx=1000., miny=-1000, maxy=1000, minz=z-z_delta, maxz=z+z_delta)
         return SearchableBoxGeometry(
             type='searchableBox',
-            purpose='refinementRegion', 
             bbox=box,
             refineMax=refLevel
         )
@@ -97,8 +103,6 @@ class StlAnalysis:
     # to calculate nearest wall thickness for a target yPlus value
     @staticmethod
     def calc_y(nu=1e-6, rho=1000., L=1.0, U_val=1.0, target_yPlus=200):
-        # rho = fluid_properties.rho
-        # nu = fluid_properties.nu
         Re = U_val*L/nu
         Cf = 0.0592*Re**(-1./5.)
         tau = 0.5*rho*Cf*U_val**2.
@@ -183,11 +187,6 @@ class StlAnalysis:
         n = np.log(targetCellSize*0.4/yFirst)/np.log(expRatio)
         return int(np.ceil(n))
 
-    @staticmethod
-    def calc_delta(U=1.0, nu=1e-6, L=1.0):
-        Re = U*L/nu
-        delta = 0.37*L/Re**(0.2)
-        return delta
 
     @staticmethod
     # calculates N layers and final layer thickness
@@ -267,7 +266,7 @@ class StlAnalysis:
 
 
     @staticmethod
-    def calc_num_layers(stl_bbox: BoundingBox, domain: Domain, settings: SimulationSettings, ref_level: int):
+    def calc_boundary_layer(stl_bbox: BoundingBox, domain: Domain, settings: SimulationSettings, target_cell_size: float):
         characteristic_length = stl_bbox.max_length
 
         target_yPlus = {
@@ -276,22 +275,28 @@ class StlAnalysis:
             "fine": 30,
         }[settings.mesh.refAmount]
         
-        background_cell_size = (domain.maxx-domain.minx)/domain.nx
         # this is the thickness of closest cell
         target_y = StlAnalysis.calc_y(
-            settings.physicalProperties.nu, 
-            settings.physicalProperties.rho, 
+            settings.physical_properties.nu, 
+            settings.physical_properties.rho, 
             characteristic_length, 
-            U_val=max(settings.inletValues.U), 
+            U_val=max(settings.inlet_values.U), 
             target_yPlus=target_yPlus
         )
         
-        target_cell_size = background_cell_size/2.**ref_level
         first_layer_thickness = target_y*2.0
         final_layer_thickness = target_cell_size*0.35
 
-        return max(1, int(np.log(final_layer_thickness / first_layer_thickness)/np.log(settings.mesh.addLayersControls.expansionRatio)))
+        num_layers = max(1, int(np.log(final_layer_thickness / first_layer_thickness)/np.log(settings.mesh.addLayersControls.expansionRatio)))
 
+    
+        return BoundaryLayer(
+            yPlus=target_yPlus, 
+            y=target_y, 
+            first_layer_thickness=first_layer_thickness, 
+            final_layer_thickness=final_layer_thickness, 
+            nLayers=num_layers
+        )
 
     @staticmethod
     def calc_center_of_mass(mesh: vtk.vtkPolyData):
@@ -351,7 +356,7 @@ class StlAnalysis:
     # to set mesh settings for blockMeshDict and snappyHexMeshDict
     # TODO: make this apply for multiple stl files
     @staticmethod
-    def update_settings(settings: SimulationSettings, stl_path: Union[str, Path], purpose: PatchPurpose, property: PatchProperty):
+    def add_stl_to_settings(settings: SimulationSettings, stl_path: Union[str, Path], purpose: PatchType, property: PatchProperty):
         stl_name = Path(stl_path).name
         stl_mesh = read_stl_file(str(stl_path))
         stl_bbox = StlAnalysis.compute_bounding_box(stl_mesh)
@@ -365,16 +370,19 @@ class StlAnalysis:
             "fine": 6,
         }[settings.mesh.refAmount]
 
-        settings.mesh.domain = StlAnalysis.calc_domain(stl_bbox, settings)
-        num_layers = StlAnalysis.calc_num_layers(stl_bbox, settings.mesh.domain, settings, ref_level)
+        stl_domain = StlAnalysis.calc_domain(stl_bbox, settings)
 
+        background_cell_size = abs((stl_domain.maxx-stl_domain.minx)/stl_domain.nx)
+        target_cell_size = background_cell_size/2.**ref_level
+        boundary_layer = StlAnalysis.calc_boundary_layer(stl_bbox, stl_domain, settings, target_cell_size)
+        
+        settings.mesh.domain = stl_domain
         settings.mesh.geometry[stl_name] = TriSurfaceMeshGeometry(
-            purpose=purpose,
             refineMin=0,
             refineMax=0,
             featureEdges=feature_edges,
             featureLevel=1,
-            nLayers=num_layers,
+            nLayers=boundary_layer.nLayers,
             property=property,
             bounds=stl_bbox
         )
@@ -386,7 +394,7 @@ class StlAnalysis:
                 geometry.refineMin = refMin
                 geometry.refineMax = refMax
                 geometry.featureLevel = max(ref_level, 1)
-                geometry.nLayers = num_layers
+                geometry.nLayers = boundary_layer.nLayers
 
         settings.mesh.castellatedMeshControls.locationInMesh = StlAnalysis.get_location_in_mesh(stl_mesh, settings.mesh.internalFlow)
         
@@ -403,28 +411,29 @@ class StlAnalysis:
         settings.mesh.addLayersControls.minThickness = minThickness
 
         # store the background mesh size for future reference
-        settings.mesh.maxCellSize = abs((settings.mesh.domain.maxx-settings.mesh.domain.minx)/settings.mesh.domain.nx)
+        settings.mesh.maxCellSize = background_cell_size
+
+
+        # print the summary of results
+        IOUtils.print("\n-----------------Mesh Settings-----------------")
+        IOUtils.print(stl_domain.__repr__())
+        IOUtils.print(f"Max cell size: {background_cell_size}")
+        IOUtils.print(f"Min cell size: {target_cell_size}")
+        IOUtils.print(f"Refinement Level:{ref_level}")
+
+        characteristic_length = stl_bbox.max_length
+        reynolds_number = TurbulenceUtils.calc_renolds_number(U=max(settings.inlet_values.U), L=characteristic_length, nu=settings.physical_properties.nu)
+        delta = TurbulenceUtils.calc_delta(reynolds_number, characteristic_length)
+
+        IOUtils.print("\n-----------------Turbulence-----------------")
+        IOUtils.print(f"Target yPlus:{boundary_layer.yPlus}")
+        IOUtils.print(f'Reynolds number:{reynolds_number}')
+        IOUtils.print(f"Boundary layer thickness: {delta}")
+        IOUtils.print(f"Final layer thickness:{boundary_layer.final_layer_thickness}")
+        IOUtils.print(f"Number of layers:{boundary_layer.nLayers}")
+
 
         return settings.mesh
 
 
 
-
-        # # print the summary of results
-        # AmpersandIO.printMessage(
-        #     "\n-----------------Mesh Settings-----------------")
-        # AmpersandIO.printMessage(f"Domain size: {domain_size.size}")
-        # AmpersandIO.printMessage(f"Nx Ny Nz: {nx},{ny},{nz}")
-        # AmpersandIO.printMessage(f"Max cell size: {backgroundCellSize}")
-        # AmpersandIO.printMessage(f"Min cell size: {targetCellSize}")
-        # AmpersandIO.printMessage(f"Refinement Level:{ref_level}")
-
-        # AmpersandIO.printMessage(
-        #     "\n-----------------Turbulence-----------------")
-        # AmpersandIO.printMessage(f"Target yPlus:{target_yPlus}")
-        # AmpersandIO.printMessage(f'Reynolds number:{U*L/nu}')
-        # AmpersandIO.printMessage(f"Boundary layer thickness:{delta}")
-        # AmpersandIO.printMessage(f"First layer thickness:{adjustedNearWallThickness}")
-        # AmpersandIO.printMessage(f"Final layer thickness:{finalLayerThickness}")
-        # AmpersandIO.printMessage(f"YPlus:{adjustedYPlus}")
-        # AmpersandIO.printMessage(f"Number of layers:{nLayers}")

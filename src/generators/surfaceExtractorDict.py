@@ -17,25 +17,34 @@
  */
 """
 
-from typing import Literal
+from pathlib import Path
+from typing import Literal, Union
 from src.models.settings import MeshSettings, TriSurfaceMeshGeometry
 from src.utils.generation import GenerationUtils
 
+SurfaceExtractObjectType = Literal["surfaceFeatureExtractDict", "surfaceFeaturesDict"]
 
-def create_surfaceDict(meshSettings: MeshSettings, objectName: Literal["surfaceFeatureExtractDict", "surfaceFeaturesDict"]) -> str:
-    surfaceDict = GenerationUtils.createFoamHeader("dictionary", objectName)
-    for geometry_name, geometry in meshSettings.geometry.items():
-        if isinstance(geometry, TriSurfaceMeshGeometry):
-            surfaceDict += f"""\n{geometry_name}
-{{
-extractionMethod    extractFromSurface;
-includedAngle   170;
-subsetFeatures
-{{
-    nonManifoldEdges       no;
-    openEdges       yes;
-}}
-writeObj            yes;
-writeSets           no;
-}}"""
-    return surfaceDict
+class SurfaceExtractorDictGenerator:
+    @staticmethod
+    def generate(mesh_settings: MeshSettings, type: SurfaceExtractObjectType) -> str:
+        surfaceDict = GenerationUtils.createFoamHeader("dictionary", type)
+        for geometry_name, geometry in mesh_settings.geometry.items():
+            if isinstance(geometry, TriSurfaceMeshGeometry):
+                surfaceDict += f"""\n{geometry_name}
+    {{
+    extractionMethod    extractFromSurface;
+    includedAngle   170;
+    subsetFeatures
+    {{
+        nonManifoldEdges       no;
+        openEdges       yes;
+    }}
+    writeObj            yes;
+    writeSets           no;
+    }}"""
+        return surfaceDict
+
+
+    @staticmethod
+    def write(mesh_settings: MeshSettings, type: SurfaceExtractObjectType, project_path: Union[str, Path]):
+        Path(f"{project_path}/system/{type}").write_text(SurfaceExtractorDictGenerator.generate(mesh_settings, type))

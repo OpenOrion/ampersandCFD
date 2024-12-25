@@ -17,12 +17,17 @@
  */
 """
 
+from pathlib import Path
+from typing import Union
 from src.models.settings import ControlSettings
+from src.utils.data_input import IOUtils
 from src.utils.generation import GenerationUtils
 
 
-def createControlDict(control_settings: ControlSettings):
-    return f"""{GenerationUtils.createFoamHeader('dictionary', 'controlDict')}
+class ControlDictGenerator:
+    @staticmethod
+    def generate(control_settings: ControlSettings):
+        return f"""{GenerationUtils.createFoamHeader('dictionary', 'controlDict')}
 application     {control_settings.application};
 startFrom       {control_settings.startFrom};
 startTime       {control_settings.startTime};
@@ -48,3 +53,7 @@ libs
 (
 );
 """
+
+    @staticmethod
+    def write(control_settings: ControlSettings, project_path: Union[str, Path]):
+        Path(f"{project_path}/system/controlDict").write_text(ControlDictGenerator.generate(control_settings))

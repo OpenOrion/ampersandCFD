@@ -17,14 +17,15 @@
  */
 """
 
+from pathlib import Path
 from typing import Literal, Union
 from src.utils.data_input import IOUtils
-from src.models.settings import MeshSettings, PostProcessSettings
+from src.models.settings import MeshSettings, PostProcessSettings, Location
 
 
-class PostProcess:
+class PostProcessGenerator:
     @staticmethod
-    def create_post_process_script():
+    def generate_post_process_script():
         cmdPostProcess = f"""#!/bin/sh
 cd "${{0%/*}}" || exit                                # Run from this directory
 . ${{WM_PROJECT_DIR:?}}/bin/tools/RunFunctions        # Tutorial run functions
@@ -37,7 +38,7 @@ runApplication postProcess
 
     @staticmethod
     # function object for showing minimum and maximum values of the fields
-    def FO_min_max():
+    def get_FO_min_max():
         FO = f"""
 minMax
 {{
@@ -54,7 +55,7 @@ minMax
         return FO
 
     @staticmethod
-    def FO_yPlus():
+    def get_FO_yPlus():
         FO = f"""
 yPlus1
 {{
@@ -70,7 +71,7 @@ yPlus1
         return FO
 
     @staticmethod
-    def FO_forces(patchName="patchName", rhoInf=1, CofR=(0, 0, 0), pitchAxis=(0, 1, 0)):
+    def get_FO_forces(patchName="patchName", rhoInf=1, CofR=(0, 0, 0), pitchAxis=(0, 1, 0)):
         FO = f"""
 forces
 {{
@@ -110,7 +111,7 @@ forces
         return FO
 
     @staticmethod
-    def FO_probes(probeName="probeName", probeLocations=[[0, 0, 0]]):
+    def get_FO_probes(probeName="probeName", probeLocations:set[Location]=set([(0, 0, 0)])):
         FO = f"""
 {probeName}
 {{
@@ -159,39 +160,46 @@ streamLines
         return probeLocation
 
     @staticmethod
-    def get_mass_flow_rate_FO(meshSettings: MeshSettings):
+    def get_mass_flow_rate_FO(mesh_settings: MeshSettings):
         massFlowFO = ""
         # for internal flow problems, get all patches
-        if (meshSettings.internalFlow):
-            for geometry_name, geometry in meshSettings.geometry.items():
+        if (mesh_settings.internalFlow):
+            for geometry_name, geometry in mesh_settings.geometry.items():
                 patch_name = geometry_name.split(".")[0]
-                if (geometry.purpose == "inlet" or geometry.purpose == "outlet"):
+                if (geometry.type == "inlet" or geometry.type == "outlet"):
                     # TODO: why is this -4, for removing "name"?
-                    massFlowFO += PostProcess.FO_massFlow(patchName=patch_name)
+                    massFlowFO += PostProcessGenerator.FO_massFlow(patchName=patch_name)
                     # massFlowFO += postProcess.FO_massFlow(patchName=patch)
         else:
             # for external flow problems, there are only inlet and outlet patches
-            massFlowFO += PostProcess.FO_massFlow(patchName="inlet")
-            massFlowFO += PostProcess.FO_massFlow(patchName="outlet")
+            massFlowFO += PostProcessGenerator.FO_massFlow(patchName="inlet")
+            massFlowFO += PostProcessGenerator.FO_massFlow(patchName="outlet")
         return massFlowFO
 
     @staticmethod
-    def create_FOs(meshSettings: MeshSettings, postProcessSettings: PostProcessSettings, useFOs=True):
+    def generate_FOs(mesh_settings: MeshSettings, post_process_settings: PostProcessSettings, useFOs=True):
         if (not useFOs):
             return "// No function objects are used"
         FOs = ""
-        if (postProcessSettings.minMax):
-            FOs += PostProcess.FO_min_max()
-        if (postProcessSettings.yPlus):
-            FOs += PostProcess.FO_yPlus()
-        if (postProcessSettings.forces):
-            FOs += PostProcess.FO_forces(patchName="wall",
+        if (post_process_settings.minMax):
+            FOs += PostProcessGenerator.get_FO_min_max()
+        if (post_process_settings.yPlus):
+            FOs += PostProcessGenerator.get_FO_yPlus()
+        if (post_process_settings.forces):
+            FOs += PostProcessGenerator.get_FO_forces(patchName="wall",
                                          rhoInf=1, CofR=(0, 0, 0), pitchAxis=(0, 1, 0))
-        if (postProcessSettings.massFlow):
-            FOs += PostProcess.get_mass_flow_rate_FO(meshSettings)
-        if (len(postProcessSettings.probeLocations) > 0):
-            FOs += PostProcess.FO_probes(probeName="probe",
-                                         probeLocations=postProcessSettings.probeLocations)
-        # if(postProcessSettings.streamLines):
+        if (post_process_settings.massFlow):
+            FOs += PostProcessGenerator.get_mass_flow_rate_FO(mesh_settings)
+        if (len(post_process_settings.probeLocations) > 0):
+            FOs += PostProcessGenerator.get_FO_probes(probeName="probe",
+                                         probeLocations=post_process_settings.probeLocations)
+        # if(post_process_settings.streamLines):
         #    FOs += postProcess.FO_streamLines(start=(0,0,0),end=(0,0,1),nPoints=100)
         return FOs
+
+
+    @staticmethod
+    def write(mesh_settings: MeshSettings, post_process_settings: PostProcessSettings, project_path: Union[str, Path]):
+        # Path(f"{project_path}/system/postProcessDict").write_text(PostProcess.generate_FOs(mesh_settings, post_process_settings))
+        # Path(f"{project_path}/Allrun_postProcess").write_text(PostProcess.generate_post_process_script())
+        Path(f"{project_path}/system/FOs").write_text(PostProcessGenerator.generate_FOs(mesh_settings, post_process_settings))
