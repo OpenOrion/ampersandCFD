@@ -27,7 +27,7 @@ import math
 from src.models.settings import BoundingBox, Domain, MeshSettings, SearchableBoxGeometry, SimulationSettings, TriSurfaceMeshGeometry, RefinementAmount, PatchType, PatchProperty
 from src.thirdparty.stlToOpenFOAM import find_inside_point, is_point_inside, read_stl_file
 from src.thirdparty.stlToOpenFOAM import extract_curvature_data, compute_curvature
-from src.utils.data_input import IOUtils
+from src.utils.io import IOUtils
 from src.utils.turbulence import TurbulenceUtils
 
 class BoundaryLayer(BaseModel):

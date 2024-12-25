@@ -19,7 +19,7 @@ from time import sleep
 
 # Connection to the Ampersand Backend
 from project import AmpersandProject
-from src.utils.data_input import IOUtils
+from src.utils.io import IOUtils
 from src.services.project_service import ProjectService
 
 

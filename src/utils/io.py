@@ -17,8 +17,7 @@
  */
 """
 
-from typing import Any, cast
-import sys
+from typing import Any, Literal, Union, cast
 from tkinter import filedialog, Tk
 
 from src.models.inputs import FLUID_PYSICAL_PROPERTIES, FluidProperties
@@ -30,6 +29,8 @@ try:
     from src.gui.dialogBoxes import inputDialogDriver, vectorInputDialogDriver
 except:
     pass
+
+ModificationType = Literal["Background Mesh", "Mesh Point", "Add Geometry", "Refinement Levels", "Boundary Conditions", "Fluid Properties", "Numerical Settings", "Simulation Control Settings", "Turbulence Model", "Post Processing Settings"]
 
 class IOUtils:
     GUIMode: bool = False
@@ -198,22 +199,22 @@ class AmpersandDataInput:
         return U
 
     @staticmethod
-    def choose_modification_categorized():
-        options = ['Mesh', 'Boundary Conditions', 'Fluid Properties', 'Numerical Settings',
+    def choose_modification_type() -> ModificationType:
+        options: list[Union[Literal['Mesh'], ModificationType]] = ['Mesh', 'Boundary Conditions', 'Fluid Properties', 'Numerical Settings',
                    'Simulation Control Settings', 'Turbulence Model', 'Post Processing Settings']
         current_modification = IOUtils.get_option_choice(prompt="Choose any option for project modification: ",
                                                              options=options, title="\nModify Project Settings")
-        mesh_options = ['Background Mesh', 'Mesh Point',
-                        'Add Geometry', 'Refinement Levels']
+        mesh_options: list[ModificationType] = ['Background Mesh', 'Mesh Point', 'Add Geometry', 'Refinement Levels']
 
         if current_modification < 0 or current_modification > len(options)-1:
             raise ValueError("Invalid option. Aborting operation")
-            
-        if current_modification == 0:
+
+        selected_modification = options[current_modification] 
+        if selected_modification == "Mesh":
             return mesh_options[IOUtils.get_option_choice(prompt="Choose any option for mesh modification: ",
-                                                                                   options=mesh_options, title="\nModify Mesh Settings")]
+                                options=mesh_options, title="\nModify Mesh Settings")]
         else:
-            return options[current_modification]
+            return selected_modification
 
 
     @staticmethod

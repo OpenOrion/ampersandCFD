@@ -20,7 +20,7 @@
 from pathlib import Path
 import matplotlib.pyplot as plt
 import time
-from src.utils.data_input import IOUtils
+from src.utils.io import IOUtils
 
 from src.services.project_service import ProjectService
 

@@ -18,7 +18,7 @@
 """
 
 import os
-from src.utils.data_input import IOUtils
+from src.utils.io import IOUtils
 from src.cli.create_project import create_project
 from src.cli.open_project import open_project
 from src.utils.watch_sim import watch_sim
@@ -40,6 +40,7 @@ def main():
 
     # Clear the screen
     os.system('cls' if os.name == 'nt' else 'clear')
+    IOUtils.verbose = True
 
     IOUtils.print(AMPERSAND_HEADER)
 

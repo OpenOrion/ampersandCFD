@@ -21,7 +21,7 @@
 from pathlib import Path
 from src.services.mod_service import ModService
 from src.models.inputs import FLUID_PYSICAL_PROPERTIES, CreateProjectInput, StlInput, TransientInput
-from src.utils.data_input import AmpersandDataInput, IOUtils
+from src.utils.io import AmpersandDataInput, IOUtils
 from src.services.project_service import ProjectService
 
 

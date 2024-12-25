@@ -65,7 +65,7 @@ import json
 import os
 import argparse
 
-from src.utils.data_input import IOUtils
+from src.utils.io import IOUtils
 
 def read_stl_file(filename):
     """

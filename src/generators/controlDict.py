@@ -20,7 +20,7 @@
 from pathlib import Path
 from typing import Union
 from src.models.settings import ControlSettings
-from src.utils.data_input import IOUtils
+from src.utils.io import IOUtils
 from src.utils.generation import GenerationUtils
 
 

@@ -18,7 +18,7 @@
 """
 
 # Description: This file contains the main class for the Ampersand CFD application. The class is decorated with the TrameApp decorator, which is used to create a Trame application. The class contains methods to handle the opening of a file, adding a box, adding a sphere, showing a wireframe, showing a surface, and showing a surface with edges. The class also contains a method to build the user interface of the application. The user interface contains a toolbar with three buttons, a drawer with buttons to open a file, add a box, and add a sphere, and a main content area with a VtkLocalView widget to display the 3D object. The class also contains a method to update the VtkLocalView widget with the new 3D object.
-from src.utils.data_input import IOUtils
+from src.utils.io import IOUtils
 from trame.app import get_server
 from trame.decorators import TrameApp, change, controller
 from trame.ui.vuetify import SinglePageWithDrawerLayout

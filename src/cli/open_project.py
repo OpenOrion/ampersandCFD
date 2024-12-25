@@ -19,7 +19,7 @@
 
 from pathlib import Path
 from src.services.mod_service import ModService
-from src.utils.data_input import AmpersandDataInput, IOUtils
+from src.utils.io import AmpersandDataInput, IOUtils
 
 from src.services.project_service import ProjectService
 
@@ -38,7 +38,7 @@ def open_project():
     modify_project = IOUtils.get_input_bool("Do you want to modify the project settings (y/N)?: ")
    
     while modify_project:
-        modification_type = AmpersandDataInput.choose_modification_categorized()
+        modification_type = AmpersandDataInput.choose_modification_type()
         ModService.modify_project(project, modification_type)
         ProjectService.write_settings(project)
         

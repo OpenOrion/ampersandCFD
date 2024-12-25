@@ -9,7 +9,7 @@ import vtk
 import sys
 from time import sleep
 
-from src.utils.data_input import IOUtils
+from src.utils.io import IOUtils
 
 loader = QUiLoader()
 

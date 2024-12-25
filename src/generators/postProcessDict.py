@@ -19,7 +19,7 @@
 
 from pathlib import Path
 from typing import Literal, Union
-from src.utils.data_input import IOUtils
+from src.utils.io import IOUtils
 from src.models.settings import MeshSettings, PostProcessSettings, Location
 
 

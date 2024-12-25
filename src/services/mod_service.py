@@ -18,15 +18,13 @@
 """
 
 
-from typing import Literal
 from src.models.inputs import StlInput
 from src.models.settings import BoundingBox, Domain, TriSurfaceMeshGeometry
 from src.services.project_service import ProjectService
-from src.utils.data_input import AmpersandDataInput, IOUtils
+from src.utils.io import AmpersandDataInput, IOUtils, ModificationType
 from src.project import AmpersandProject
 from src.utils.stl_analysis import StlAnalysis
 
-ModificationType = Literal["Background Mesh", "Mesh Point", "Add Geometry", "Refinement Levels", "Boundary Conditions", "Fluid Properties", "Numerical Settings", "Simulation Control Settings", "Turbulence Model", "Post Processing Settings"]
 
 # A collection of functions that are used to modify the project
 class ModService:

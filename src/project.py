@@ -19,7 +19,7 @@
 from pathlib import Path
 from typing import Optional, Union
 from src.models.settings import SimulationSettings, TriSurfaceMeshGeometry, PatchType, PatchProperty
-from src.utils.data_input import IOUtils
+from src.utils.io import IOUtils
 
 
 class AmpersandProject: 

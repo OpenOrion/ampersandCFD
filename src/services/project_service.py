@@ -11,7 +11,7 @@ from src.generators.fvDict import FVDictGenerator
 from src.models.inputs import CreateProjectInput, PathLike, StlInput
 from src.models.settings import SimulationSettings
 from src.generators.postProcessDict import PostProcessGenerator
-from src.utils.data_input import IOUtils
+from src.utils.io import IOUtils
 from src.project import AmpersandProject
 from src.generators.cmdScript import CmdScriptGenerator
 from src.generators.snappyHexMeshDict import SnappyHexMeshDictGenerator
