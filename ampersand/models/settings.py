@@ -157,12 +157,14 @@ class Domain(BoundingBox):
 
 
     @staticmethod
-    def update(current: "Domain", domain_size: Optional["BoundingBox"] = None, nx: Optional[int] = None, ny: Optional[int] = None, nz: Optional[int] = None):
+    def update(current: "Domain", new_domain: Union[BoundingBox, "Domain", None] = None, nx: Optional[int] = None, ny: Optional[int] = None, nz: Optional[int] = None):
         """
         Update the bounding box coordinates with the given domain size.
         """
-        if domain_size is None:
+        if new_domain is None:
             domain_size = current
+        else:
+            domain_size = new_domain
 
         return Domain(
             minx=min(domain_size.minx, current.minx),
@@ -171,10 +173,11 @@ class Domain(BoundingBox):
             maxy=max(domain_size.maxy, current.maxy),
             minz=min(domain_size.minz, current.minz),
             maxz=max(domain_size.maxz, current.maxz),
-            nx=nx or current.nx,
-            ny=ny or current.ny,
-            nz=nz or current.nz
+            nx=nx or max(new_domain.nx if (isinstance(new_domain, Domain)) else 0, current.nx),
+            ny=ny or max(new_domain.ny if (isinstance(new_domain, Domain)) else 0, current.ny),
+            nz=nz or max(new_domain.nz if (isinstance(new_domain, Domain)) else 0, current.nz)
         )
+
 
 
 Number = Union[int, float]

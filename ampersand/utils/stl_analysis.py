@@ -372,69 +372,90 @@ class StlAnalysis:
             "fine": 6,
         }[settings.mesh.refAmount]
 
-        stl_domain = StlAnalysis.calc_domain(stl_bbox, settings)
+        if (type == "wall"):
+            for geometry in settings.mesh.geometry.values():
+                if geometry.type == "wall":
+                    raise ValueError("Only one wall geometry entry allowed currently, if multiple please fuse with one STL")
 
-        background_cell_size = abs((stl_domain.maxx-stl_domain.minx)/stl_domain.nx)
-        target_cell_size = background_cell_size/2.**ref_level
-        boundary_layer = StlAnalysis.calc_boundary_layer(stl_bbox, settings, target_cell_size)
+            stl_domain = StlAnalysis.calc_domain(stl_bbox, settings)
+            settings.mesh.domain = Domain.update(settings.mesh.domain, stl_domain)
+
+
+            background_cell_size = abs((stl_domain.maxx-stl_domain.minx)/stl_domain.nx)
+            target_cell_size = background_cell_size/2.**ref_level
+            boundary_layer = StlAnalysis.calc_boundary_layer(stl_bbox, settings, target_cell_size)
+            n_layer = boundary_layer.nLayers
+
+            # store the background mesh size for future reference
+            settings.mesh.maxCellSize = background_cell_size
+
+
+            settings.mesh.castellatedMeshControls.locationInMesh = StlAnalysis.get_location_in_mesh(stl_mesh, settings.mesh.internalFlow)
+            
+            box_ref_level = max(2, ref_level-3)
+            refinement_boxes = StlAnalysis.get_refinement_boxes(stl_bbox, ref_level=box_ref_level, is_internal_flow=settings.mesh.internalFlow)
+            settings.mesh.geometry.update(refinement_boxes)
+            if (not settings.mesh.internalFlow and settings.mesh.onGround):
+                # if the flow is external and the geometry is on the ground, add a ground refinement box
+                settings.mesh.geometry["groundBox"] = StlAnalysis.get_ground_refinement_box(settings.mesh, stl_bbox, box_ref_level)
+            
+            ref_min = max(1, ref_level)
+            ref_max = max(2, ref_level)
+            feature_level =  max(ref_level, 1)
+            for geometry in settings.mesh.geometry.values():
+                if isinstance(geometry, TriSurfaceMeshGeometry):
+                    geometry.refineMin = ref_min
+                    geometry.refineMax = ref_max
+                    geometry.featureLevel = feature_level
+                    geometry.nLayers = n_layer
+
+            # set the layer thickness to 0.5 times the cell size
+            settings.mesh.addLayersControls.finalLayerThickness = 0.5
+            minThickness = max(0.0001, settings.mesh.addLayersControls.finalLayerThickness/100.)
+            settings.mesh.addLayersControls.minThickness = minThickness
+
+            characteristic_length = stl_bbox.max_length        
+            reynolds_number = TurbulenceUtils.calc_renolds_number(U=settings.boundary_conditions.velocityInlet.u_max, L=characteristic_length, nu=settings.physical_properties.nu)
+            delta = TurbulenceUtils.calc_delta(reynolds_number, characteristic_length)
+
+
+            IOUtils.print("\n-----------------Turbulence-----------------")
+            IOUtils.print(f"Target yPlus:{boundary_layer.yPlus}")
+            IOUtils.print(f'Reynolds number:{reynolds_number}')
+            IOUtils.print(f"Boundary layer thickness: {delta}")
+            IOUtils.print(f"Final layer thickness:{boundary_layer.final_layer_thickness}")
+            IOUtils.print(f"Number of layers:{boundary_layer.nLayers}")
+
+
+            # print the summary of results
+            IOUtils.print("\n-----------------Mesh Settings-----------------")
+            IOUtils.print(stl_domain.__repr__())
+            IOUtils.print(f"Max cell size: {background_cell_size}")
+            IOUtils.print(f"Min cell size: {target_cell_size}")
+            IOUtils.print(f"Refinement Level:{ref_level}")
+
+
         
-        settings.mesh.domain = stl_domain
+        else:
+            n_layer = {
+                "coarse": 2,
+                "medium": 4,
+                "fine": 6,
+            }[settings.mesh.refAmount]
+            ref_min = 0
+            ref_max = 0
+            feature_level = 1
+
         settings.mesh.geometry[stl_name] = TriSurfaceMeshGeometry(
             type=type,
-            refineMin=0,
-            refineMax=0,
+            refineMin=ref_min,
+            refineMax=ref_max,
             featureEdges=feature_edges,
             featureLevel=1,
-            nLayers=boundary_layer.nLayers,
+            nLayers=n_layer,
             property=property,
             bounds=stl_bbox
         )
-
-        refMin = max(1, ref_level)
-        refMax = max(2, ref_level)
-        for geometry in settings.mesh.geometry.values():
-            if isinstance(geometry, TriSurfaceMeshGeometry):
-                geometry.refineMin = refMin
-                geometry.refineMax = refMax
-                geometry.featureLevel = max(ref_level, 1)
-                geometry.nLayers = boundary_layer.nLayers
-
-        settings.mesh.castellatedMeshControls.locationInMesh = StlAnalysis.get_location_in_mesh(stl_mesh, settings.mesh.internalFlow)
-        
-        box_ref_level = max(2, ref_level-3)
-        refinement_boxes = StlAnalysis.get_refinement_boxes(stl_bbox, ref_level=box_ref_level, is_internal_flow=settings.mesh.internalFlow)
-        settings.mesh.geometry.update(refinement_boxes)
-        if (not settings.mesh.internalFlow and settings.mesh.onGround):
-            # if the flow is external and the geometry is on the ground, add a ground refinement box
-            settings.mesh.geometry["groundBox"] = StlAnalysis.get_ground_refinement_box(settings.mesh, stl_bbox, box_ref_level)
-        
-        # set the layer thickness to 0.5 times the cell size
-        settings.mesh.addLayersControls.finalLayerThickness = 0.5
-        minThickness = max(0.0001, settings.mesh.addLayersControls.finalLayerThickness/100.)
-        settings.mesh.addLayersControls.minThickness = minThickness
-
-        # store the background mesh size for future reference
-        settings.mesh.maxCellSize = background_cell_size
-
-
-        # print the summary of results
-        IOUtils.print("\n-----------------Mesh Settings-----------------")
-        IOUtils.print(stl_domain.__repr__())
-        IOUtils.print(f"Max cell size: {background_cell_size}")
-        IOUtils.print(f"Min cell size: {target_cell_size}")
-        IOUtils.print(f"Refinement Level:{ref_level}")
-
-        characteristic_length = stl_bbox.max_length
-        
-        reynolds_number = TurbulenceUtils.calc_renolds_number(U=settings.boundary_conditions.velocityInlet.u_max, L=characteristic_length, nu=settings.physical_properties.nu)
-        delta = TurbulenceUtils.calc_delta(reynolds_number, characteristic_length)
-
-        IOUtils.print("\n-----------------Turbulence-----------------")
-        IOUtils.print(f"Target yPlus:{boundary_layer.yPlus}")
-        IOUtils.print(f'Reynolds number:{reynolds_number}')
-        IOUtils.print(f"Boundary layer thickness: {delta}")
-        IOUtils.print(f"Final layer thickness:{boundary_layer.final_layer_thickness}")
-        IOUtils.print(f"Number of layers:{boundary_layer.nLayers}")
 
 
         return settings.mesh
