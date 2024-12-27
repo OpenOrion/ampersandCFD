@@ -12,7 +12,7 @@ from ampersandCFD.models.inputs import CreateProjectInput, PathLike, StlInput
 from ampersandCFD.models.settings import SimulationSettings
 from ampersandCFD.generators.postProcessDict import PostProcessGenerator
 from ampersandCFD.utils.io import IOUtils
-from ampersandCFD.project import AmpersandProject
+from ampersandCFD.models.project import AmpersandProject
 from ampersandCFD.generators.cmdScript import CmdScriptGenerator
 from ampersandCFD.generators.snappyHexMeshDict import SnappyHexMeshDictGenerator
 from ampersandCFD.generators.surfaceExtractorDict import SurfaceExtractorDictGenerator

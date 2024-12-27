@@ -22,7 +22,7 @@ from ampersandCFD.models.inputs import StlInput
 from ampersandCFD.models.settings import BoundingBox, Domain, TriSurfaceMeshGeometry
 from ampersandCFD.services.project_service import ProjectService
 from ampersandCFD.utils.io import AmpersandDataInput, IOUtils, ModificationType
-from ampersandCFD.project import AmpersandProject
+from ampersandCFD.models.project import AmpersandProject
 from ampersandCFD.utils.stl_analysis import StlAnalysis
 
 

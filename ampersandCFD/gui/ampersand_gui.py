@@ -18,7 +18,7 @@ import sys
 from time import sleep
 
 # Connection to the Ampersand Backend
-from project import AmpersandProject
+from ampersandCFD.models.project import AmpersandProject
 from ampersandCFD.utils.io import AmpersandDataInput, IOUtils
 from ampersandCFD.services.project_service import ProjectService
 
