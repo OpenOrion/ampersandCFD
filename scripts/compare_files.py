@@ -1,64 +1,61 @@
 import os
-import filecmp
-from difflib import unified_diff
 from pathlib import Path
 import sys
 
-def compare_directories(dir1, dir2):
-    """Compare all corresponding files between two directories."""
+def concat_directory_files(dir1, dir2):
+    """Concatenate all files from each directory into single files, ignoring STL files."""
     dir1_path = Path(dir1)
     dir2_path = Path(dir2)
+    output1=f"{dir1_path.stem}.txt"
+    output2=f"{dir2_path.stem}.txt"
+
     
     if not dir1_path.exists() or not dir2_path.exists():
         print("One or both directories do not exist!")
         return
 
-    # Get all files in both directories
-    files1 = set(f.relative_to(dir1_path) for f in dir1_path.rglob('*') if f.is_file())
-    files2 = set(f.relative_to(dir2_path) for f in dir2_path.rglob('*') if f.is_file())
+    # Get all files in both directories, excluding .stl and .yaml files
+    files1 = set(f.relative_to(dir1_path) for f in dir1_path.rglob('*') 
+                 if f.is_file() and f.suffix.lower() not in ['.stl', '.yaml'])
+    files2 = set(f.relative_to(dir2_path) for f in dir2_path.rglob('*') 
+                 if f.is_file() and f.suffix.lower() not in ['.stl', '.yaml'])
 
-    # Find common files
-    common_files = files1.intersection(files2)
-    
-    # Print files that exist in one directory but not in the other
-    only_in_dir1 = files1 - files2
-    only_in_dir2 = files2 - files1
-    
-    if only_in_dir1:
-        print(f"\nFiles only in {dir1}:")
-        for file in sorted(only_in_dir1):
-            print(f"  {file}")
-    
-    if only_in_dir2:
-        print(f"\nFiles only in {dir2}:")
-        for file in sorted(only_in_dir2):
-            print(f"  {file}")
+    # Rest of the code remains the same...
+    all_files = sorted(files1.union(files2))
 
-    # Compare common files
-    print("\nDifferences in common files:")
-    print("=" * 80)
-    
-    for file in sorted(common_files):
-        file1_path = dir1_path / file
-        file2_path = dir2_path / file
-        
-        if not filecmp.cmp(file1_path, file2_path, shallow=False):
-            print(f"\nDiff for: {file}")
-            print("-" * 40)
-            
-            with open(file1_path, 'r') as f1, open(file2_path, 'r') as f2:
-                diff = unified_diff(
-                    f1.readlines(),
-                    f2.readlines(),
-                    fromfile=str(file1_path),
-                    tofile=str(file2_path)
-                )
-                print(''.join(diff), end='')
+    # Concatenate files from directory 1
+    with open(output1, 'w') as outfile1:
+        for file in all_files:
+            file_path = dir1_path / file
+            if file_path.exists():
+                outfile1.write(f"\n=== {file} ===\n")
+                try:
+                    with open(file_path, 'r') as infile:
+                        outfile1.write(infile.read())
+                except Exception as e:
+                    outfile1.write(f"Error reading file: {str(e)}\n")
+            else:
+                outfile1.write(f"\n=== {file} ===\nFile does not exist in {dir1}\n")
+
+    # Concatenate files from directory 2
+    with open(output2, 'w') as outfile2:
+        for file in all_files:
+            file_path = dir2_path / file
+            if file_path.exists():
+                outfile2.write(f"\n=== {file} ===\n")
+                try:
+                    with open(file_path, 'r') as infile:
+                        outfile2.write(infile.read())
+                except Exception as e:
+                    outfile2.write(f"Error reading file: {str(e)}\n")
+            else:
+                outfile2.write(f"\n=== {file} ===\nFile does not exist in {dir2}\n")
+
+    print(f"Created concatenated files: {output1} and {output2}")
 
 if __name__ == "__main__":
-    
     if len(sys.argv) != 3:
         print("Usage: python compare_files.py <directory1> <directory2>")
         sys.exit(1)
     
-    compare_directories(sys.argv[1], sys.argv[2])
+    concat_directory_files(sys.argv[1], sys.argv[2])

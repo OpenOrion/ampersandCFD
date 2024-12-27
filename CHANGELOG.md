@@ -7,10 +7,10 @@
 * Removed InletValues since it was mostly unused with exception of U which is the same as boundary_conditions.velocityInlet.u_value
 * Merged patches and bcPatches
 
-### STL Utils
+### Meshing
 * Removed dead code and made `calc_mesh_settings` into composable functions
 * Created `BoundingBox` and `Domain` classes to faciliatate redundant calculations
-
+* Fixed `StlAnalysis.calc_nx_ny_nz` to return even amount, meant mod (%) instead of (//)
 
 ### Code Quality Improvements
 * Use pathlib instead of os.path

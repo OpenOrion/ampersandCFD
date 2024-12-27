@@ -9,7 +9,7 @@ def parse_requirements(filename):
 requirements = parse_requirements('requirements.txt')
 
 setup(
-    name='ampersand_cfd',
+    name='ampersandCFD',
     version='2.0.0',
     description='Computational Fluid Dynamics Tools',
     author='Thaw Tar',
@@ -20,7 +20,7 @@ setup(
     install_requires=requirements,
     entry_points={
         'console_scripts': [
-            'ampersandcfd = ampersand.cli.cli:main',
+            'ampersandcfd = ampersandCFD.cli.cli:main',
         ],
     },
     classifiers=[
