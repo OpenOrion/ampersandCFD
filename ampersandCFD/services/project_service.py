@@ -33,7 +33,7 @@ yaml.add_representer(tuple, represent_tuple)
 
 class ProjectService:
     @staticmethod
-    def create_project(project_path: PathLike, input: Optional[CreateProjectInput] = None)
+    def create_project(project_path: PathLike, input: Optional[CreateProjectInput] = None):
         """Create the project directory structure for an OpenFOAM case.
         
         Args:

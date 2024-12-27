@@ -34,13 +34,13 @@ pip install -r requirements.txt
 ### Create New Case
 ```bash
 cd ampersandCFD/src
-python main.py --create
+ampersandcfd --create
 ```
 
 ### Modify Existing Case
 ```bash
 cd ampersandCFD/src
-python main.py --open
+ampersandcfd --open
 ```
 
 ## Key Features
