@@ -34,18 +34,9 @@ RUN ARCH=$(uname -m) && \
 # Initialize conda and run package installs
 RUN CONDA_PATH=/home/vscode/miniconda3/bin/conda && \
   $CONDA_PATH init && \
-<<<<<<< HEAD
   $CONDA_PATH install -n base ipykernel --update-deps --force-reinstall -y
   # $CONDA_PATH install -n base -c conda-forge -c cadquery cadquery=master -y
   
 RUN . /home/vscode/miniconda3/etc/profile.d/conda.sh && \
     conda activate base
     # pip install ezdxf --upgrade
-=======
-  $CONDA_PATH install -n base ipykernel --update-deps --force-reinstall -y && \
-  $CONDA_PATH install -n base -c conda-forge -c cadquery cadquery=master -y
-  
-RUN . /home/vscode/miniconda3/etc/profile.d/conda.sh && \
-    conda activate base && \
-    pip install ezdxf --upgrade
->>>>>>> 25c1823a815d2d2f25490023e0fa479a92aa2171
