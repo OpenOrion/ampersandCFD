@@ -6,10 +6,10 @@ RUN apt-get update -y && \
   rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 # Install OpenFoam
-RUN sh -c "wget -O - https://dl.openfoam.org/gpg.key > /etc/apt/trusted.gpg.d/openfoam.asc" && \
-    add-apt-repository http://dl.openfoam.org/ubuntu && \
+RUN curl https://dl.openfoam.com/add-debian-repo.sh | sudo bash && \
     apt-get update -y && \
-    apt -y install openfoam11
+    apt-get -y install openfoam2406-default
+
 
 
 # Determine architecture and download appropriate Miniconda installer
@@ -40,3 +40,6 @@ RUN CONDA_PATH=/home/vscode/miniconda3/bin/conda && \
 RUN . /home/vscode/miniconda3/etc/profile.d/conda.sh && \
     conda activate base
     # pip install ezdxf --upgrade
+
+
+RUN echo "source /usr/lib/openfoam/openfoam2406/etc/bashrc" >> /home/vscode/.bashrc
